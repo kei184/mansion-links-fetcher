@@ -36,7 +36,13 @@ def search_building_id(property_name):
     """Ajax Search で buildingid を取得"""
     try:
         search_url = f"https://www.e-mansion.co.jp/bbs/estate/ajaxSearch/?q={quote(property_name)}"
-        response = requests.get(search_url, timeout=10)
+        
+        # User-Agent を追加
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        
+        response = requests.get(search_url, timeout=10, headers=headers)
         response.raise_for_status()
         data = response.json()
         
@@ -47,11 +53,18 @@ def search_building_id(property_name):
         print(f"Error searching for {property_name}: {e}")
         return None
 
+
 def fetch_ad_url(building_id):
     """Ajax JSON から広告URL を取得（優先順位: 純広告 > L広告 > Y広告）"""
     try:
         json_url = f"https://www.e-mansion.co.jp/bbs/yre/building/{building_id}/ajaxJson/"
-        response = requests.get(json_url, timeout=10)
+        
+        # User-Agent を追加
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        
+        response = requests.get(json_url, timeout=10, headers=headers)
         response.raise_for_status()
         data = response.json()
         
