@@ -1,0 +1,1 @@
+# mansion-links-fetcher
