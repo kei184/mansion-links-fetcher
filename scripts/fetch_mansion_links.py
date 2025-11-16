@@ -1,12 +1,18 @@
 import os
 import json
 import requests
+import time
 from urllib.parse import quote
 from google.auth.transport.requests import Request
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
+
+# 共通ヘッダー
+HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+}
 
 def get_sheets_service():
     """Google Sheets サービスを初期化"""
@@ -37,34 +43,35 @@ def search_building_id(property_name):
     try:
         search_url = f"https://www.e-mansion.co.jp/bbs/estate/ajaxSearch/?q={quote(property_name)}"
         
-        # User-Agent を追加
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
+        # リクエスト前に待機（レート制限対策）
+        time.sleep(1)
         
-        response = requests.get(search_url, timeout=10, headers=headers)
+        response = requests.get(search_url, timeout=10, headers=HEADERS)
         response.raise_for_status()
         data = response.json()
         
         if data.get('building') and len(data['building']) > 0:
             return data['building'][0]['buildingid']
         return None
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 403:
+            print(f"Warning: 403 Forbidden for {property_name} - API may be blocking requests")
+        else:
+            print(f"Error searching for {property_name}: {e}")
+        return None
     except Exception as e:
         print(f"Error searching for {property_name}: {e}")
         return None
-
 
 def fetch_ad_url(building_id):
     """Ajax JSON から広告URL を取得（優先順位: 純広告 > L広告 > Y広告）"""
     try:
         json_url = f"https://www.e-mansion.co.jp/bbs/yre/building/{building_id}/ajaxJson/"
         
-        # User-Agent を追加
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
+        # リクエスト前に待機
+        time.sleep(1)
         
-        response = requests.get(json_url, timeout=10, headers=headers)
+        response = requests.get(json_url, timeout=10, headers=HEADERS)
         response.raise_for_status()
         data = response.json()
         
@@ -90,6 +97,12 @@ def fetch_ad_url(building_id):
                 ad_url = f"{y_url}?sc_out=mikle_mansion_official"
                 return ad_url, 'Y'
         
+        return None, None
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 403:
+            print(f"Warning: 403 Forbidden for building {building_id}")
+        else:
+            print(f"Error fetching ad URL for building {building_id}: {e}")
         return None, None
     except Exception as e:
         print(f"Error fetching ad URL for building {building_id}: {e}")
