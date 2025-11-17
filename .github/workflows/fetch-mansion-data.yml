@@ -36,3 +36,4 @@ jobs:
           SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
           INPUT_RANGE: ${{ secrets.INPUT_RANGE }}
         run: python scripts/fetch_ad_info_full.py
+
