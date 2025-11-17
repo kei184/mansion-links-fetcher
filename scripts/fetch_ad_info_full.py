@@ -53,59 +53,35 @@ def fetch_ad_info(building_id):
         ad_info = {
             'p_dtlurl': '',
             'p_sold_flag': '',
-            'l_project_cd': '',
+            'l_url': '',
             'l_sold_flag': '',
             'y_dtlurl': '',
             'y_sold_flag': ''
         }
         
-        print(f"    Raw JSON: {json.dumps(data, ensure_ascii=False)[:200]}")
-        
         # result キーの中を確認
         if 'result' in data:
             result_data = data['result']
-            print(f"    Result keys: {list(result_data.keys()) if isinstance(result_data, dict) else 'Not a dict'}")
             
-            if isinstance(result_data, dict):
-                # 純広告（p）
-                if 'p' in result_data and result_data['p']:
-                    p = result_data['p']
-                    ad_info['p_dtlurl'] = str(p.get('dtlurl', ''))
-                    ad_info['p_sold_flag'] = str(p.get('sold_flag', ''))
-                    print(f"      Pure Ad: dtlurl={ad_info['p_dtlurl'][:50] if ad_info['p_dtlurl'] else 'None'}")
-                
-                # L広告（l）
-                if 'l' in result_data and result_data['l']:
-                    l = result_data['l']
-                    ad_info['l_project_cd'] = str(l.get('project_cd', ''))
-                    ad_info['l_sold_flag'] = str(l.get('sold_flag', ''))
-                    print(f"      L Ad: project_cd={ad_info['l_project_cd']}")
-                
-                # Y広告（y）
-                if 'y' in result_data and result_data['y']:
-                    y = result_data['y']
-                    ad_info['y_dtlurl'] = str(y.get('dtlurl', ''))
-                    ad_info['y_sold_flag'] = str(y.get('sold_flag', ''))
-                    print(f"      Y Ad: dtlurl={ad_info['y_dtlurl'][:50] if ad_info['y_dtlurl'] else 'None'}")
-        
-        # トップレベルを直接確認（念のため）
-        if 'p' in data and data['p']:
-            p = data['p']
-            ad_info['p_dtlurl'] = str(p.get('dtlurl', ''))
-            ad_info['p_sold_flag'] = str(p.get('sold_flag', ''))
-            print(f"      Pure Ad (top level): dtlurl={ad_info['p_dtlurl'][:50] if ad_info['p_dtlurl'] else 'None'}")
-        
-        if 'l' in data and data['l']:
-            l = data['l']
-            ad_info['l_project_cd'] = str(l.get('project_cd', ''))
-            ad_info['l_sold_flag'] = str(l.get('sold_flag', ''))
-            print(f"      L Ad (top level): project_cd={ad_info['l_project_cd']}")
-        
-        if 'y' in data and data['y']:
-            y = data['y']
-            ad_info['y_dtlurl'] = str(y.get('dtlurl', ''))
-            ad_info['y_sold_flag'] = str(y.get('sold_flag', ''))
-            print(f"      Y Ad (top level): dtlurl={ad_info['y_dtlurl'][:50] if ad_info['y_dtlurl'] else 'None'}")
+            # 純広告（p）
+            if 'p' in result_data and result_data['p']:
+                p = result_data['p']
+                ad_info['p_dtlurl'] = str(p.get('dtlurl', ''))
+                ad_info['p_sold_flag'] = str(p.get('sold_flag', ''))
+            
+            # L広告（l）- URL を構築
+            if 'l' in result_data and result_data['l']:
+                l = result_data['l']
+                project_cd = l.get('project_cd', '')
+                if project_cd:
+                    ad_info['l_url'] = f"https://www.homes.co.jp/mansion/b-{project_cd}/?cmp_id=001_08359_0008683659&utm_campaign=v6_sumulab&utm_content=001_08359_0008683659&utm_medium=cpa&utm_source=sumulab&utm_term="
+                ad_info['l_sold_flag'] = str(l.get('sold_flag', ''))
+            
+            # Y広告（y）- 直接 URL を取得
+            if 'y' in result_data and result_data['y']:
+                y = result_data['y']
+                ad_info['y_dtlurl'] = str(y.get('dtlurl', ''))
+                ad_info['y_sold_flag'] = str(y.get('sold_flag', ''))
         
         return ad_info
     except Exception as e:
@@ -127,7 +103,7 @@ def main():
     l_data = [['Building ID']]
     
     # M～R列用データ（広告情報）
-    m_data = [['p_dtlurl', 'p_sold_flag', 'l_project_cd', 'l_sold_flag', 'y_dtlurl', 'y_sold_flag']]
+    m_data = [['p_dtlurl', 'p_sold_flag', 'l_url', 'l_sold_flag', 'y_dtlurl', 'y_sold_flag']]
     
     for i, property_name in enumerate(property_names, 1):
         print(f"[{i}/{len(property_names)}] {property_name}", end=" -> ")
@@ -145,7 +121,7 @@ def main():
                 m_row = [
                     ad_info.get('p_dtlurl', ''),
                     ad_info.get('p_sold_flag', ''),
-                    ad_info.get('l_project_cd', ''),
+                    ad_info.get('l_url', ''),
                     ad_info.get('l_sold_flag', ''),
                     ad_info.get('y_dtlurl', ''),
                     ad_info.get('y_sold_flag', '')
