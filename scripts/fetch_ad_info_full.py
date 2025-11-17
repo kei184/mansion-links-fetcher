@@ -51,66 +51,38 @@ def fetch_ad_info(building_id):
         data = response.json()
         
         ad_info = {
-            'p_dtlurl': None,
-            'p_sold_flag': None,
-            'l_project_cd': None,
-            'l_sold_flag': None,
-            'y_dtlurl': None,
-            'y_sold_flag': None
+            'p_dtlurl': '',
+            'p_sold_flag': '',
+            'l_project_cd': '',
+            'l_sold_flag': '',
+            'y_dtlurl': '',
+            'y_sold_flag': ''
         }
         
+        print(f"    JSON Keys: {list(data.keys())}")
+        
         if 'p' in data and data['p']:
-            ad_info['p_dtlurl'] = data['p'].get('dtlurl')
-            ad_info['p_sold_flag'] = data['p'].get('sold_flag')
+            p = data['p']
+            ad_info['p_dtlurl'] = str(p.get('dtlurl', ''))
+            ad_info['p_sold_flag'] = str(p.get('sold_flag', ''))
+            print(f"      Pure Ad: dtlurl={ad_info['p_dtlurl'][:50] if ad_info['p_dtlurl'] else 'None'}, sold_flag={ad_info['p_sold_flag']}")
         
         if 'l' in data and data['l']:
-            ad_info['l_project_cd'] = data['l'].get('project_cd')
-            ad_info['l_sold_flag'] = data['l'].get('sold_flag')
+            l = data['l']
+            ad_info['l_project_cd'] = str(l.get('project_cd', ''))
+            ad_info['l_sold_flag'] = str(l.get('sold_flag', ''))
+            print(f"      L Ad: project_cd={ad_info['l_project_cd']}, sold_flag={ad_info['l_sold_flag']}")
         
         if 'y' in data and data['y']:
-            ad_info['y_dtlurl'] = data['y'].get('dtlurl')
-            ad_info['y_sold_flag'] = data['y'].get('sold_flag')
+            y = data['y']
+            ad_info['y_dtlurl'] = str(y.get('dtlurl', ''))
+            ad_info['y_sold_flag'] = str(y.get('sold_flag', ''))
+            print(f"      Y Ad: dtlurl={ad_info['y_dtlurl'][:50] if ad_info['y_dtlurl'] else 'None'}, sold_flag={ad_info['y_sold_flag']}")
         
         return ad_info
     except Exception as e:
-        print(f"  Error: {e}")
+        print(f"  Error fetching ad info: {e}")
         return None
-
-def write_all_ads_to_sheets(service, spreadsheet_id, results):
-    """全ての広告情報を M1:R に出力"""
-    try:
-        # M: p_dtlurl, N: p_sold_flag, O: l_project_cd, P: l_sold_flag, Q: y_dtlurl, R: y_sold_flag
-        data = [['p_dtlurl', 'p_sold_flag', 'l_project_cd', 'l_sold_flag', 'y_dtlurl', 'y_sold_flag']]
-        
-        for result in results:
-            row = [
-                result.get('p_dtlurl', ''),
-                result.get('p_sold_flag', ''),
-                result.get('l_project_cd', ''),
-                result.get('l_sold_flag', ''),
-                result.get('y_dtlurl', ''),
-                result.get('y_sold_flag', '')
-            ]
-            data.append(row)
-        
-        body = {'values': data}
-        service.spreadsheets().values().update(spreadsheetId=spreadsheet_id, range='新着物件!M1', valueInputOption='RAW', body=body).execute()
-        print(f"\nSuccessfully wrote {len(results)} ads to 新着物件!M1:R")
-    except Exception as e:
-        print(f"\nError writing to spreadsheet: {e}")
-
-def write_building_ids_to_sheets(service, spreadsheet_id, results):
-    """Building IDs を L1 に出力"""
-    try:
-        data = [['Building ID']]
-        for result in results:
-            row = [result.get('building_id', '')]
-            data.append(row)
-        body = {'values': data}
-        service.spreadsheets().values().update(spreadsheetId=spreadsheet_id, range='新着物件!L1', valueInputOption='RAW', body=body).execute()
-        print(f"Successfully wrote {len(results)} Building IDs to 新着物件!L1")
-    except Exception as e:
-        print(f"Error writing to spreadsheet: {e}")
 
 def main():
     spreadsheet_id = os.environ.get('SPREADSHEET_ID')
@@ -123,40 +95,68 @@ def main():
     property_names = fetch_property_names(service, spreadsheet_id, input_range)
     print(f"Found {len(property_names)} properties to process\n")
     
-    results = []
+    # L列用データ（Building ID）
+    l_data = [['Building ID']]
+    
+    # M～R列用データ（広告情報）
+    m_data = [['p_dtlurl', 'p_sold_flag', 'l_project_cd', 'l_sold_flag', 'y_dtlurl', 'y_sold_flag']]
+    
     for i, property_name in enumerate(property_names, 1):
         print(f"[{i}/{len(property_names)}] {property_name}", end=" -> ")
         building_id = search_building_id(property_name)
         
         if building_id:
-            print(f"ID: {building_id}", end=" -> ")
+            print(f"ID: {building_id}")
             ad_info = fetch_ad_info(building_id)
             
             if ad_info:
-                print(f"OK")
-                result = {
-                    'building_id': building_id,
-                    'p_dtlurl': ad_info.get('p_dtlurl', ''),
-                    'p_sold_flag': ad_info.get('p_sold_flag', ''),
-                    'l_project_cd': ad_info.get('l_project_cd', ''),
-                    'l_sold_flag': ad_info.get('l_sold_flag', ''),
-                    'y_dtlurl': ad_info.get('y_dtlurl', ''),
-                    'y_sold_flag': ad_info.get('y_sold_flag', '')
-                }
+                # L列に追加
+                l_data.append([str(building_id)])
+                
+                # M～R列に追加
+                m_row = [
+                    ad_info.get('p_dtlurl', ''),
+                    ad_info.get('p_sold_flag', ''),
+                    ad_info.get('l_project_cd', ''),
+                    ad_info.get('l_sold_flag', ''),
+                    ad_info.get('y_dtlurl', ''),
+                    ad_info.get('y_sold_flag', '')
+                ]
+                m_data.append(m_row)
+                print(f"      Added to m_data: {m_row}")
             else:
-                print(f"Failed")
-                result = {'building_id': building_id}
+                print(f"      Failed to fetch ad info")
+                l_data.append([str(building_id)])
+                m_data.append(['', '', '', '', '', ''])
         else:
             print(f"Not found")
-            result = {'building_id': ''}
-        
-        results.append(result)
+            l_data.append([''])
+            m_data.append(['', '', '', '', '', ''])
     
-    # L列に Building ID を出力
-    write_building_ids_to_sheets(service, spreadsheet_id, results)
+    print(f"\nTotal L data rows: {len(l_data)}")
+    print(f"Total M data rows: {len(m_data)}")
+    print(f"Sample L data (first 3 rows): {l_data[:3]}")
+    print(f"Sample M data (first 3 rows): {m_data[:3]}")
     
-    # M～R列に広告情報を出力
-    write_all_ads_to_sheets(service, spreadsheet_id, results)
+    # L列に書き込み
+    try:
+        body = {'values': l_data}
+        result_l = service.spreadsheets().values().update(spreadsheetId=spreadsheet_id, range='新着物件!L1', valueInputOption='RAW', body=body).execute()
+        print(f"\nSuccessfully wrote {len(l_data)-1} Building IDs to L1:L")
+        print(f"  Update result: {result_l.get('updatedRows')} rows, {result_l.get('updatedColumns')} columns")
+    except Exception as e:
+        print(f"Error writing L column: {e}")
+        return
+    
+    # M～R列に書き込み
+    try:
+        body = {'values': m_data}
+        result_m = service.spreadsheets().values().update(spreadsheetId=spreadsheet_id, range='新着物件!M1', valueInputOption='RAW', body=body).execute()
+        print(f"Successfully wrote {len(m_data)-1} AD infos to M1:R")
+        print(f"  Update result: {result_m.get('updatedRows')} rows, {result_m.get('updatedColumns')} columns")
+    except Exception as e:
+        print(f"Error writing M:R columns: {e}")
+        return
     
     print("Process completed!")
 
