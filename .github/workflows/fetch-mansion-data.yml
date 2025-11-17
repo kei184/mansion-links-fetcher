@@ -35,5 +35,5 @@ jobs:
           GOOGLE_SHEETS_CREDENTIALS: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS }}
           SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
           INPUT_RANGE: ${{ secrets.INPUT_RANGE }}
-        run: python scripts/fetch_ad_info_full.py
+        run: python scripts/fetch_ad_info_y_debug.py
 
