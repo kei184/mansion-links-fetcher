@@ -59,17 +59,14 @@ def fetch_ad_info(building_id):
             'y_sold_flag': None
         }
         
-        # 純広告（p）
         if 'p' in data and data['p']:
             ad_info['p_dtlurl'] = data['p'].get('dtlurl')
             ad_info['p_sold_flag'] = data['p'].get('sold_flag')
         
-        # L広告（l）
         if 'l' in data and data['l']:
             ad_info['l_project_cd'] = data['l'].get('project_cd')
             ad_info['l_sold_flag'] = data['l'].get('sold_flag')
         
-        # Y広告（y）
         if 'y' in data and data['y']:
             ad_info['y_dtlurl'] = data['y'].get('dtlurl')
             ad_info['y_sold_flag'] = data['y'].get('sold_flag')
@@ -79,12 +76,14 @@ def fetch_ad_info(building_id):
         print(f"  Error: {e}")
         return None
 
-def write_results_to_sheets(service, spreadsheet_id, output_range, results):
+def write_all_ads_to_sheets(service, spreadsheet_id, results):
+    """全ての広告情報を M1:R に出力"""
     try:
-        data = [['Building ID', 'p_dtlurl', 'p_sold_flag', 'l_project_cd', 'l_sold_flag', 'y_dtlurl', 'y_sold_flag']]
+        # M: p_dtlurl, N: p_sold_flag, O: l_project_cd, P: l_sold_flag, Q: y_dtlurl, R: y_sold_flag
+        data = [['p_dtlurl', 'p_sold_flag', 'l_project_cd', 'l_sold_flag', 'y_dtlurl', 'y_sold_flag']]
+        
         for result in results:
             row = [
-                result.get('building_id', ''),
                 result.get('p_dtlurl', ''),
                 result.get('p_sold_flag', ''),
                 result.get('l_project_cd', ''),
@@ -93,16 +92,29 @@ def write_results_to_sheets(service, spreadsheet_id, output_range, results):
                 result.get('y_sold_flag', '')
             ]
             data.append(row)
+        
         body = {'values': data}
-        service.spreadsheets().values().update(spreadsheetId=spreadsheet_id, range=output_range, valueInputOption='RAW', body=body).execute()
-        print(f"\nSuccessfully wrote {len(results)} results to {output_range}")
+        service.spreadsheets().values().update(spreadsheetId=spreadsheet_id, range='新着物件!M1', valueInputOption='RAW', body=body).execute()
+        print(f"\nSuccessfully wrote {len(results)} ads to 新着物件!M1:R")
     except Exception as e:
         print(f"\nError writing to spreadsheet: {e}")
+
+def write_building_ids_to_sheets(service, spreadsheet_id, results):
+    """Building IDs を L1 に出力"""
+    try:
+        data = [['Building ID']]
+        for result in results:
+            row = [result.get('building_id', '')]
+            data.append(row)
+        body = {'values': data}
+        service.spreadsheets().values().update(spreadsheetId=spreadsheet_id, range='新着物件!L1', valueInputOption='RAW', body=body).execute()
+        print(f"Successfully wrote {len(results)} Building IDs to 新着物件!L1")
+    except Exception as e:
+        print(f"Error writing to spreadsheet: {e}")
 
 def main():
     spreadsheet_id = os.environ.get('SPREADSHEET_ID')
     input_range = os.environ.get('INPUT_RANGE', 'Sheet1!A2:A')
-    output_range = os.environ.get('OUTPUT_RANGE', '新着物件!L1')
     
     if not spreadsheet_id:
         raise ValueError("SPREADSHEET_ID is not set")
@@ -140,7 +152,12 @@ def main():
         
         results.append(result)
     
-    write_results_to_sheets(service, spreadsheet_id, output_range, results)
+    # L列に Building ID を出力
+    write_building_ids_to_sheets(service, spreadsheet_id, results)
+    
+    # M～R列に広告情報を出力
+    write_all_ads_to_sheets(service, spreadsheet_id, results)
+    
     print("Process completed!")
 
 if __name__ == '__main__':
