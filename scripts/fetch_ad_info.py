@@ -59,7 +59,6 @@ def fetch_ad_info(building_id):
             'y_sold_flag': ''
         }
         
-        # result キーの中を確認
         if 'result' in data:
             result_data = data['result']
             
@@ -77,11 +76,12 @@ def fetch_ad_info(building_id):
                     ad_info['l_url'] = f"https://www.homes.co.jp/mansion/b-{project_cd}/?cmp_id=001_08359_0008683659&utm_campaign=v6_sumulab&utm_content=001_08359_0008683659&utm_medium=cpa&utm_source=sumulab&utm_term="
                 ad_info['l_sold_flag'] = str(l.get('sold_flag', ''))
             
-            # Y広告（y）- 直接 URL を取得
-            if 'y' in result_data and result_data['y']:
-                y = result_data['y']
-                ad_info['y_dtlurl'] = str(y.get('dtlurl', ''))
-                ad_info['y_sold_flag'] = str(y.get('sold_flag', ''))
+            # Y広告（ynew）- 直接 URL を取得
+            if 'ynew' in result_data and result_data['ynew']:
+                y = result_data['ynew']
+                if isinstance(y, dict):
+                    ad_info['y_dtlurl'] = str(y.get('dtlurl', ''))
+                    ad_info['y_sold_flag'] = str(y.get('sold_flag', ''))
         
         return ad_info
     except Exception as e:
