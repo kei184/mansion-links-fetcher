@@ -3,35 +3,24 @@ import json
 import requests
 import time
 from urllib.parse import quote
-from google.auth.transport.requests import Request
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 
-# 共通ヘッダー
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
 }
 
 def get_sheets_service():
-    """Google Sheets サービスを初期化"""
     credentials_json = os.environ.get('GOOGLE_SHEETS_CREDENTIALS')
     credentials_dict = json.loads(credentials_json)
-    
-    credentials = Credentials.from_service_account_info(
-        credentials_dict,
-        scopes=SCOPES
-    )
+    credentials = Credentials.from_service_account_info(credentials_dict, scopes=SCOPES)
     return build('sheets', 'v4', credentials=credentials)
 
 def fetch_property_names(service, spreadsheet_id, input_range):
-    """スプレッドシートから物件名を取得"""
     try:
-        result = service.spreadsheets().values().get(
-            spreadsheetId=spreadsheet_id,
-            range=input_range
-        ).execute()
+        result = service.spreadsheets().values().get(spreadsheetId=spreadsheet_id, range=input_range).execute()
         values = result.get('values', [])
         return [row[0] for row in values if row]
     except Exception as e:
@@ -39,142 +28,154 @@ def fetch_property_names(service, spreadsheet_id, input_range):
         return []
 
 def search_building_id(property_name):
-    """Ajax Search で buildingid を取得"""
     try:
         search_url = f"https://www.e-mansion.co.jp/bbs/estate/ajaxSearch/?q={quote(property_name)}"
-        
-        # リクエスト前に待機（レート制限対策）
         time.sleep(1)
-        
         response = requests.get(search_url, timeout=10, headers=HEADERS)
         response.raise_for_status()
         data = response.json()
-        
         if data.get('building') and len(data['building']) > 0:
             return data['building'][0]['buildingid']
         return None
-    except requests.exceptions.HTTPError as e:
-        if e.response.status_code == 403:
-            print(f"Warning: 403 Forbidden for {property_name} - API may be blocking requests")
-        else:
-            print(f"Error searching for {property_name}: {e}")
-        return None
     except Exception as e:
-        print(f"Error searching for {property_name}: {e}")
+        print(f"  Error: {e}")
         return None
 
-def fetch_ad_url(building_id):
-    """Ajax JSON から広告URL を取得（優先順位: 純広告 > L広告 > Y広告）"""
+def find_yahoo_url_and_flag(data):
+    """JSON構造のどこからでも Yahoo新築マンション dtlurl と sold_flag を探す"""
+    def deep_search(obj):
+        if isinstance(obj, dict):
+            if obj.get('dtlurl', '').startswith("https://realestate.yahoo.co.jp/new/mansion/dtl/"):
+                return obj['dtlurl'], str(obj.get('sold_flag', ''))
+            for v in obj.values():
+                url, flag = deep_search(v)
+                if url:
+                    return url, flag
+        elif isinstance(obj, list):
+            for item in obj:
+                url, flag = deep_search(item)
+                if url:
+                    return url, flag
+        elif isinstance(obj, str):
+            if obj.startswith("https://realestate.yahoo.co.jp/new/mansion/dtl/"):
+                return obj, ''
+        return None, None
+    return deep_search(data)
+
+def fetch_ad_info(building_id):
+    """Ajax JSON から広告情報を取得"""
     try:
         json_url = f"https://www.e-mansion.co.jp/bbs/yre/building/{building_id}/ajaxJson/"
-        
-        # リクエスト前に待機
         time.sleep(1)
-        
         response = requests.get(json_url, timeout=10, headers=HEADERS)
         response.raise_for_status()
         data = response.json()
         
-        # 1. 純広告（優先度最高）
-        if 'p' in data:
-            p = data['p']
-            if p.get('sold_flag') == 0:
-                return p.get('dtlurl'), 'pure'
+        ad_info = {
+            'p_dtlurl': '',
+            'p_sold_flag': '',
+            'l_url': '',
+            'l_sold_flag': '',
+            'y_dtlurl': '',
+            'y_sold_flag': ''
+        }
         
-        # 2. L広告
-        if 'l' in data:
-            l = data['l']
-            if l.get('sold_flag') == 0:
-                project_cd = l.get('project_cd')
-                ad_url = f"https://www.homes.co.jp/mansion/b-{project_cd}/?cmp_id=001_08359_0008683659&utm_campaign=v6_sumulab&utm_content=001_08359_0008683659&utm_medium=cpa&utm_source=sumulab&utm_term="
-                return ad_url, 'L'
+        if 'result' in data:
+            result_data = data['result']
+            
+            # 純広告（p）
+            if 'p' in result_data and result_data['p']:
+                p = result_data['p']
+                ad_info['p_dtlurl'] = str(p.get('dtlurl', ''))
+                ad_info['p_sold_flag'] = str(p.get('sold_flag', ''))
+            
+            # L広告（l）- URL を構築
+            if 'l' in result_data and result_data['l']:
+                l = result_data['l']
+                project_cd = l.get('project_cd', '')
+                if project_cd:
+                    ad_info['l_url'] = f"https://www.homes.co.jp/mansion/b-{project_cd}/?cmp_id=001_08359_0008683659&utm_campaign=v6_sumulab&utm_content=001_08359_0008683659&utm_medium=cpa&utm_source=sumulab&utm_term="
+                ad_info['l_sold_flag'] = str(l.get('sold_flag', ''))
         
-        # 3. Y広告
-        if 'y' in data:
-            y = data['y']
-            if y.get('sold_flag') == 0:
-                y_url = y.get('dtlurl')
-                ad_url = f"{y_url}?sc_out=mikle_mansion_official"
-                return ad_url, 'Y'
+        # Y広告 - パターン網羅的に探索
+        y_url, y_flag = find_yahoo_url_and_flag(data)
+        if y_url:
+            ad_info['y_dtlurl'] = y_url
+            ad_info['y_sold_flag'] = y_flag
         
-        return None, None
-    except requests.exceptions.HTTPError as e:
-        if e.response.status_code == 403:
-            print(f"Warning: 403 Forbidden for building {building_id}")
-        else:
-            print(f"Error fetching ad URL for building {building_id}: {e}")
-        return None, None
+        return ad_info
     except Exception as e:
-        print(f"Error fetching ad URL for building {building_id}: {e}")
-        return None, None
-
-def write_results_to_sheets(service, spreadsheet_id, output_range, results):
-    """結果をスプレッドシートに書き込み"""
-    try:
-        data = [['物件名', 'Building ID', 'URL', '広告タイプ', '取得日時']]
-        
-        from datetime import datetime
-        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        
-        for result in results:
-            row = [
-                result['property_name'],
-                result.get('building_id', ''),
-                result.get('ad_url', ''),
-                result.get('ad_type', ''),
-                now
-            ]
-            data.append(row)
-        
-        body = {'values': data}
-        service.spreadsheets().values().update(
-            spreadsheetId=spreadsheet_id,
-            range=output_range,
-            valueInputOption='RAW',
-            body=body
-        ).execute()
-        print(f"Successfully wrote {len(results)} results to spreadsheet")
-    except Exception as e:
-        print(f"Error writing to spreadsheet: {e}")
+        print(f"  Error fetching ad info: {e}")
+        return None
 
 def main():
     spreadsheet_id = os.environ.get('SPREADSHEET_ID')
     input_range = os.environ.get('INPUT_RANGE', 'Sheet1!A2:A')
-    output_range = os.environ.get('OUTPUT_RANGE', 'Sheet2!A1')
     
     if not spreadsheet_id:
         raise ValueError("SPREADSHEET_ID is not set")
     
     service = get_sheets_service()
     property_names = fetch_property_names(service, spreadsheet_id, input_range)
-    print(f"Found {len(property_names)} properties to process")
+    print(f"Found {len(property_names)} properties to process\n")
     
-    results = []
+    # L列用データ（Building ID）
+    l_data = [['Building ID']]
+    
+    # M～R列用データ（広告情報）
+    m_data = [['p_dtlurl', 'p_sold_flag', 'l_url', 'l_sold_flag', 'y_dtlurl', 'y_sold_flag']]
+    
     for i, property_name in enumerate(property_names, 1):
-        print(f"[{i}/{len(property_names)}] Processing: {property_name}")
-        
+        print(f"[{i}/{len(property_names)}] {property_name}", end=" -> ")
         building_id = search_building_id(property_name)
         
         if building_id:
-            ad_url, ad_type = fetch_ad_url(building_id)
-            result = {
-                'property_name': property_name,
-                'building_id': building_id,
-                'ad_url': ad_url,
-                'ad_type': ad_type
-            }
+            print(f"ID: {building_id}")
+            ad_info = fetch_ad_info(building_id)
+            
+            if ad_info:
+                # L列に追加
+                l_data.append([str(building_id)])
+                
+                # M～R列に追加
+                m_row = [
+                    ad_info.get('p_dtlurl', ''),
+                    ad_info.get('p_sold_flag', ''),
+                    ad_info.get('l_url', ''),
+                    ad_info.get('l_sold_flag', ''),
+                    ad_info.get('y_dtlurl', ''),
+                    ad_info.get('y_sold_flag', '')
+                ]
+                m_data.append(m_row)
+            else:
+                l_data.append([str(building_id)])
+                m_data.append(['', '', '', '', '', ''])
         else:
-            result = {
-                'property_name': property_name,
-                'building_id': None,
-                'ad_url': None,
-                'ad_type': None
-            }
-        
-        results.append(result)
-        print(f"  → URL: {result.get('ad_url', 'Not found')}")
+            print(f"Not found")
+            l_data.append([''])
+            m_data.append(['', '', '', '', '', ''])
     
-    write_results_to_sheets(service, spreadsheet_id, output_range, results)
+    print(f"\nTotal L data rows: {len(l_data)}")
+    print(f"Total M data rows: {len(m_data)}")
+    
+    # L列に書き込み
+    try:
+        body = {'values': l_data}
+        result_l = service.spreadsheets().values().update(spreadsheetId=spreadsheet_id, range='新着物件!L1', valueInputOption='RAW', body=body).execute()
+        print(f"\nSuccessfully wrote {result_l.get('updatedRows')} Building IDs to L1:L")
+    except Exception as e:
+        print(f"Error writing L column: {e}")
+        return
+    
+    # M～R列に書き込み
+    try:
+        body = {'values': m_data}
+        result_m = service.spreadsheets().values().update(spreadsheetId=spreadsheet_id, range='新着物件!M1', valueInputOption='RAW', body=body).execute()
+        print(f"Successfully wrote {result_m.get('updatedRows')} AD infos to M1:R ({result_m.get('updatedColumns')} columns)")
+    except Exception as e:
+        print(f"Error writing M:R columns: {e}")
+        return
+    
     print("Process completed!")
 
 if __name__ == '__main__':
