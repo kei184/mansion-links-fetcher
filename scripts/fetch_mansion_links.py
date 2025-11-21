@@ -88,6 +88,7 @@ def fetch_ad_info(building_id):
                 p = result_data['p']
                 ad_info['p_dtlurl'] = str(p.get('dtlurl', ''))
                 ad_info['p_sold_flag'] = str(p.get('sold_flag', ''))
+                print(f"    P広告取得: {ad_info['p_dtlurl'][:60] if ad_info['p_dtlurl'] else 'なし'}...")
             
             # L広告（l）- URL を構築
             if 'l' in result_data and result_data['l']:
@@ -95,6 +96,7 @@ def fetch_ad_info(building_id):
                 project_cd = l.get('project_cd', '')
                 if project_cd:
                     ad_info['l_url'] = f"https://www.homes.co.jp/mansion/b-{project_cd}/?cmp_id=001_08359_0008683659&utm_campaign=v6_sumulab&utm_content=001_08359_0008683659&utm_medium=cpa&utm_source=sumulab&utm_term="
+                    print(f"    L広告取得: project_cd={project_cd}")
                 ad_info['l_sold_flag'] = str(l.get('sold_flag', ''))
         
         # Y広告 - パターン網羅的に探索
@@ -102,6 +104,9 @@ def fetch_ad_info(building_id):
         if y_url:
             ad_info['y_dtlurl'] = y_url
             ad_info['y_sold_flag'] = y_flag
+            print(f"    Y広告取得: {y_url[:60]}... (sold_flag: {y_flag})")
+        else:
+            print(f"    Y広告なし")
         
         return ad_info
     except Exception as e:
@@ -147,6 +152,7 @@ def main():
                     ad_info.get('y_sold_flag', '')
                 ]
                 m_data.append(m_row)
+                print(f"    データ追加: P={bool(m_row[0])}, L={bool(m_row[2])}, Y={bool(m_row[4])}")
             else:
                 l_data.append([str(building_id)])
                 m_data.append(['', '', '', '', '', ''])
@@ -157,6 +163,9 @@ def main():
     
     print(f"\nTotal L data rows: {len(l_data)}")
     print(f"Total M data rows: {len(m_data)}")
+    print(f"\nSample M data (first 3 rows):")
+    for idx, row in enumerate(m_data[:3]):
+        print(f"  Row {idx}: {row}")
     
     # L列に書き込み
     try:
