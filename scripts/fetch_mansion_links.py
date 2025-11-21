@@ -41,26 +41,60 @@ def search_building_id(property_name):
         print(f"  Error: {e}")
         return None
 
-def find_yahoo_url_and_flag(data):
-    """JSON構造のどこからでも Yahoo新築マンション dtlurl と sold_flag を探す"""
-    def deep_search(obj):
-        if isinstance(obj, dict):
-            if obj.get('dtlurl', '').startswith("https://realestate.yahoo.co.jp/new/mansion/dtl/"):
-                return obj['dtlurl'], str(obj.get('sold_flag', ''))
-            for v in obj.values():
-                url, flag = deep_search(v)
-                if url:
-                    return url, flag
-        elif isinstance(obj, list):
-            for item in obj:
-                url, flag = deep_search(item)
-                if url:
-                    return url, flag
-        elif isinstance(obj, str):
-            if obj.startswith("https://realestate.yahoo.co.jp/new/mansion/dtl/"):
-                return obj, ''
-        return None, None
-    return deep_search(data)
+def find_yahoo_info_comprehensive(data):
+    """Yahoo広告情報を包括的に探索"""
+    y_dtlurl = ''
+    y_sold_flag = ''
+    
+    # パターン1: result.ynew
+    if 'result' in data and isinstance(data['result'], dict):
+        result_data = data['result']
+        
+        # ynew キー
+        if 'ynew' in result_data and isinstance(result_data['ynew'], dict):
+            ynew = result_data['ynew']
+            if ynew.get('dtlurl', '').startswith('https://realestate.yahoo.co.jp/new/mansion/dtl/'):
+                y_dtlurl = ynew['dtlurl']
+                y_sold_flag = str(ynew.get('sold_flag', ''))
+                return y_dtlurl, y_sold_flag
+        
+        # y キー
+        if 'y' in result_data and isinstance(result_data['y'], dict):
+            y = result_data['y']
+            if y.get('dtlurl', '').startswith('https://realestate.yahoo.co.jp/new/mansion/dtl/'):
+                y_dtlurl = y['dtlurl']
+                y_sold_flag = str(y.get('sold_flag', ''))
+                return y_dtlurl, y_sold_flag
+    
+    # パターン2: トップレベルの ynew
+    if 'ynew' in data and isinstance(data['ynew'], dict):
+        ynew = data['ynew']
+        if ynew.get('dtlurl', '').startswith('https://realestate.yahoo.co.jp/new/mansion/dtl/'):
+            y_dtlurl = ynew['dtlurl']
+            y_sold_flag = str(ynew.get('sold_flag', ''))
+            return y_dtlurl, y_sold_flag
+    
+    # パターン3: トップレベルの y
+    if 'y' in data and isinstance(data['y'], dict):
+        y = data['y']
+        if y.get('dtlurl', '').startswith('https://realestate.yahoo.co.jp/new/mansion/dtl/'):
+            y_dtlurl = y['dtlurl']
+            y_sold_flag = str(y.get('sold_flag', ''))
+            return y_dtlurl, y_sold_flag
+    
+    # パターン4: 文字列として直接含まれている場合を探索
+    json_str = json.dumps(data)
+    import re
+    match = re.search(r'"dtlurl"\s*:\s*"(https://realestate\.yahoo\.co\.jp/new/mansion/dtl/[^"]+)"', json_str)
+    if match:
+        y_dtlurl = match.group(1)
+        # sold_flag を探す
+        sold_match = re.search(r'"sold_flag"\s*:\s*"?(\d+)"?', json_str[match.start():match.end()+200])
+        if sold_match:
+            y_sold_flag = sold_match.group(1)
+        return y_dtlurl, y_sold_flag
+    
+    return '', ''
 
 def fetch_ad_info(building_id):
     """Ajax JSON から広告情報を取得"""
@@ -88,7 +122,6 @@ def fetch_ad_info(building_id):
                 p = result_data['p']
                 ad_info['p_dtlurl'] = str(p.get('dtlurl', ''))
                 ad_info['p_sold_flag'] = str(p.get('sold_flag', ''))
-                print(f"    P広告取得: {ad_info['p_dtlurl'][:60] if ad_info['p_dtlurl'] else 'なし'}...")
             
             # L広告（l）- URL を構築
             if 'l' in result_data and result_data['l']:
@@ -96,17 +129,13 @@ def fetch_ad_info(building_id):
                 project_cd = l.get('project_cd', '')
                 if project_cd:
                     ad_info['l_url'] = f"https://www.homes.co.jp/mansion/b-{project_cd}/?cmp_id=001_08359_0008683659&utm_campaign=v6_sumulab&utm_content=001_08359_0008683659&utm_medium=cpa&utm_source=sumulab&utm_term="
-                    print(f"    L広告取得: project_cd={project_cd}")
                 ad_info['l_sold_flag'] = str(l.get('sold_flag', ''))
         
-        # Y広告 - パターン網羅的に探索
-        y_url, y_flag = find_yahoo_url_and_flag(data)
+        # Y広告 - 包括的に探索
+        y_url, y_flag = find_yahoo_info_comprehensive(data)
         if y_url:
             ad_info['y_dtlurl'] = y_url
             ad_info['y_sold_flag'] = y_flag
-            print(f"    Y広告取得: {y_url[:60]}... (sold_flag: {y_flag})")
-        else:
-            print(f"    Y広告なし")
         
         return ad_info
     except Exception as e:
@@ -152,7 +181,6 @@ def main():
                     ad_info.get('y_sold_flag', '')
                 ]
                 m_data.append(m_row)
-                print(f"    データ追加: P={bool(m_row[0])}, L={bool(m_row[2])}, Y={bool(m_row[4])}")
             else:
                 l_data.append([str(building_id)])
                 m_data.append(['', '', '', '', '', ''])
@@ -163,31 +191,44 @@ def main():
     
     print(f"\nTotal L data rows: {len(l_data)}")
     print(f"Total M data rows: {len(m_data)}")
-    print(f"\nSample M data (first 3 rows):")
-    for idx, row in enumerate(m_data[:3]):
-        print(f"  Row {idx}: {row}")
     
-    # L列に書き込み（範囲指定を明示）
+    # Yahoo広告があるデータを探す
+    yahoo_count = sum(1 for row in m_data[1:] if row[4])
+    print(f"\n=== Yahoo広告データ数: {yahoo_count}/{len(m_data)-1} ===")
+    
+    # L列に書き込み
     try:
         body = {'values': l_data}
-        result_l = service.spreadsheets().values().update(spreadsheetId=spreadsheet_id, range='新着物件!L1:L', valueInputOption='RAW', body=body).execute()
-        print(f"\nSuccessfully wrote {result_l.get('updatedRows')} Building IDs to L1:L")
+        result_l = service.spreadsheets().values().update(
+            spreadsheetId=spreadsheet_id,
+            range='新着物件!L1:L',
+            valueInputOption='RAW',
+            body=body
+        ).execute()
+        print(f"\n=== L列書き込み結果 ===")
+        print(f"Updated rows: {result_l.get('updatedRows')}")
         print(f"Updated range: {result_l.get('updatedRange')}")
     except Exception as e:
         print(f"Error writing L column: {e}")
         return
     
-    # M～R列に書き込み（範囲指定を明示）
+    # M～R列に書き込み
     try:
         body = {'values': m_data}
-        result_m = service.spreadsheets().values().update(spreadsheetId=spreadsheet_id, range='新着物件!M1:R', valueInputOption='RAW', body=body).execute()
-        print(f"Successfully wrote {result_m.get('updatedRows')} AD infos to M1:R ({result_m.get('updatedColumns')} columns)")
+        result_m = service.spreadsheets().values().update(
+            spreadsheetId=spreadsheet_id,
+            range='新着物件!M1:R',
+            valueInputOption='RAW',
+            body=body
+        ).execute()
+        print(f"\n=== M～R列書き込み結果 ===")
+        print(f"Updated rows: {result_m.get('updatedRows')}")
         print(f"Updated range: {result_m.get('updatedRange')}")
     except Exception as e:
         print(f"Error writing M:R columns: {e}")
         return
     
-    print("Process completed!")
+    print("\n=== Process completed! ===")
 
 if __name__ == '__main__':
     main()
