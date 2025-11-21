@@ -41,61 +41,6 @@ def search_building_id(property_name):
         print(f"  Error: {e}")
         return None
 
-def find_yahoo_info_comprehensive(data):
-    """Yahoo広告情報を包括的に探索"""
-    y_dtlurl = ''
-    y_sold_flag = ''
-    
-    # パターン1: result.ynew
-    if 'result' in data and isinstance(data['result'], dict):
-        result_data = data['result']
-        
-        # ynew キー
-        if 'ynew' in result_data and isinstance(result_data['ynew'], dict):
-            ynew = result_data['ynew']
-            if ynew.get('dtlurl', '').startswith('https://realestate.yahoo.co.jp/new/mansion/dtl/'):
-                y_dtlurl = ynew['dtlurl']
-                y_sold_flag = str(ynew.get('sold_flag', ''))
-                return y_dtlurl, y_sold_flag
-        
-        # y キー
-        if 'y' in result_data and isinstance(result_data['y'], dict):
-            y = result_data['y']
-            if y.get('dtlurl', '').startswith('https://realestate.yahoo.co.jp/new/mansion/dtl/'):
-                y_dtlurl = y['dtlurl']
-                y_sold_flag = str(y.get('sold_flag', ''))
-                return y_dtlurl, y_sold_flag
-    
-    # パターン2: トップレベルの ynew
-    if 'ynew' in data and isinstance(data['ynew'], dict):
-        ynew = data['ynew']
-        if ynew.get('dtlurl', '').startswith('https://realestate.yahoo.co.jp/new/mansion/dtl/'):
-            y_dtlurl = ynew['dtlurl']
-            y_sold_flag = str(ynew.get('sold_flag', ''))
-            return y_dtlurl, y_sold_flag
-    
-    # パターン3: トップレベルの y
-    if 'y' in data and isinstance(data['y'], dict):
-        y = data['y']
-        if y.get('dtlurl', '').startswith('https://realestate.yahoo.co.jp/new/mansion/dtl/'):
-            y_dtlurl = y['dtlurl']
-            y_sold_flag = str(y.get('sold_flag', ''))
-            return y_dtlurl, y_sold_flag
-    
-    # パターン4: 文字列として直接含まれている場合を探索
-    json_str = json.dumps(data)
-    import re
-    match = re.search(r'"dtlurl"\s*:\s*"(https://realestate\.yahoo\.co\.jp/new/mansion/dtl/[^"]+)"', json_str)
-    if match:
-        y_dtlurl = match.group(1)
-        # sold_flag を探す
-        sold_match = re.search(r'"sold_flag"\s*:\s*"?(\d+)"?', json_str[match.start():match.end()+200])
-        if sold_match:
-            y_sold_flag = sold_match.group(1)
-        return y_dtlurl, y_sold_flag
-    
-    return '', ''
-
 def fetch_ad_info(building_id):
     """Ajax JSON から広告情報を取得"""
     try:
@@ -117,25 +62,26 @@ def fetch_ad_info(building_id):
         if 'result' in data and data['result'] is not None:
             result_data = data['result']
             
-            # 純広告（p）
-            if 'p' in result_data and result_data['p']:
+            # 純広告（P） - result.p キー
+            if 'p' in result_data and isinstance(result_data['p'], dict) and result_data['p']:
                 p = result_data['p']
                 ad_info['p_dtlurl'] = str(p.get('dtlurl', ''))
                 ad_info['p_sold_flag'] = str(p.get('sold_flag', ''))
             
-            # L広告（l）- URL を構築
-            if 'l' in result_data and result_data['l']:
+            # L広告（L） - result.l キー
+            if 'l' in result_data and isinstance(result_data['l'], dict) and result_data['l']:
                 l = result_data['l']
                 project_cd = l.get('project_cd', '')
                 if project_cd:
                     ad_info['l_url'] = f"https://www.homes.co.jp/mansion/b-{project_cd}/?cmp_id=001_08359_0008683659&utm_campaign=v6_sumulab&utm_content=001_08359_0008683659&utm_medium=cpa&utm_source=sumulab&utm_term="
                 ad_info['l_sold_flag'] = str(l.get('sold_flag', ''))
-        
-        # Y広告 - 包括的に探索
-        y_url, y_flag = find_yahoo_info_comprehensive(data)
-        if y_url:
-            ad_info['y_dtlurl'] = y_url
-            ad_info['y_sold_flag'] = y_flag
+            
+            # Y広告 - result 直下の dtlurl がそれ（Yahoo不動産のURL）
+            if 'dtlurl' in result_data and result_data['dtlurl']:
+                dtlurl = result_data['dtlurl']
+                if dtlurl.startswith('https://realestate.yahoo.co.jp/new/mansion/dtl/'):
+                    ad_info['y_dtlurl'] = dtlurl
+                    ad_info['y_sold_flag'] = str(result_data.get('sold_flag', ''))
         
         return ad_info
     except Exception as e:
@@ -192,9 +138,15 @@ def main():
     print(f"\nTotal L data rows: {len(l_data)}")
     print(f"Total M data rows: {len(m_data)}")
     
-    # Yahoo広告があるデータを探す
-    yahoo_count = sum(1 for row in m_data[1:] if row[4])
-    print(f"\n=== Yahoo広告データ数: {yahoo_count}/{len(m_data)-1} ===")
+    # 各広告タイプのカウント
+    p_count = sum(1 for row in m_data[1:] if row[0])
+    l_count = sum(1 for row in m_data[1:] if row[2])
+    y_count = sum(1 for row in m_data[1:] if row[4])
+    
+    print(f"\n=== 広告データ統計 ===")
+    print(f"純広告（P）: {p_count} 件")
+    print(f"L広告（L）: {l_count} 件")
+    print(f"Yahoo広告（Y）: {y_count} 件")
     
     # L列に書き込み
     try:
