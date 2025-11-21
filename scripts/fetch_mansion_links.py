@@ -80,7 +80,7 @@ def fetch_ad_info(building_id):
             'y_sold_flag': ''
         }
         
-        if 'result' in data:
+        if 'result' in data and data['result'] is not None:
             result_data = data['result']
             
             # 純広告（p）
@@ -167,20 +167,22 @@ def main():
     for idx, row in enumerate(m_data[:3]):
         print(f"  Row {idx}: {row}")
     
-    # L列に書き込み
+    # L列に書き込み（範囲指定を明示）
     try:
         body = {'values': l_data}
-        result_l = service.spreadsheets().values().update(spreadsheetId=spreadsheet_id, range='新着物件!L1', valueInputOption='RAW', body=body).execute()
+        result_l = service.spreadsheets().values().update(spreadsheetId=spreadsheet_id, range='新着物件!L1:L', valueInputOption='RAW', body=body).execute()
         print(f"\nSuccessfully wrote {result_l.get('updatedRows')} Building IDs to L1:L")
+        print(f"Updated range: {result_l.get('updatedRange')}")
     except Exception as e:
         print(f"Error writing L column: {e}")
         return
     
-    # M～R列に書き込み
+    # M～R列に書き込み（範囲指定を明示）
     try:
         body = {'values': m_data}
-        result_m = service.spreadsheets().values().update(spreadsheetId=spreadsheet_id, range='新着物件!M1', valueInputOption='RAW', body=body).execute()
+        result_m = service.spreadsheets().values().update(spreadsheetId=spreadsheet_id, range='新着物件!M1:R', valueInputOption='RAW', body=body).execute()
         print(f"Successfully wrote {result_m.get('updatedRows')} AD infos to M1:R ({result_m.get('updatedColumns')} columns)")
+        print(f"Updated range: {result_m.get('updatedRange')}")
     except Exception as e:
         print(f"Error writing M:R columns: {e}")
         return
