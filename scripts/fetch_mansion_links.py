@@ -5,6 +5,7 @@ import time
 from urllib.parse import quote
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
+from datetime import datetime
 
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 
@@ -106,16 +107,36 @@ def main():
     property_names = fetch_property_names(service, spreadsheet_id, input_range)
     print(f"Found {len(property_names)} properties to process\n")
     
+    # S列の既存データを取得
+    s_column_range = '新着物件!S2:S'
+    existing_dates = []
+    try:
+        result_s = service.spreadsheets().values().get(spreadsheetId=spreadsheet_id, range=s_column_range).execute()
+        existing_values = result_s.get('values', [])
+        existing_dates = [row[0] if row else '' for row in existing_values]
+        print(f"Found {len(existing_dates)} existing dates in S column")
+    except Exception as e:
+        print(f"Error fetching S column: {e}")
+        # エラー時は空リストとして扱う（初回実行時など）
+        pass
+
     # L列用データ（Building ID）
     l_data = [['Building ID']]
     
-    # M～R列用データ（広告情報）
-    m_data = [['p_dtlurl', 'p_sold_flag', 'l_url', 'l_sold_flag', 'y_dtlurl', 'y_sold_flag']]
+    # M～S列用データ（広告情報 + 日付）
+    m_data = [['p_dtlurl', 'p_sold_flag', 'l_url', 'l_sold_flag', 'y_dtlurl', 'y_sold_flag', 'first_sold_out_date']]
     
+    today_str = datetime.now().strftime('%Y/%m/%d')
+
     for i, property_name in enumerate(property_names, 1):
         print(f"[{i}/{len(property_names)}] {property_name}", end=" -> ")
         building_id = search_building_id(property_name)
         
+        # 既存の日付を取得（インデックス調整: property_namesはA2から、existing_datesもS2からと仮定）
+        current_date = ''
+        if i-1 < len(existing_dates):
+            current_date = existing_dates[i-1]
+
         if building_id:
             print(f"ID: {building_id}")
             ad_info = fetch_ad_info(building_id)
@@ -124,28 +145,45 @@ def main():
                 # L列に追加
                 l_data.append([str(building_id)])
                 
-                # M～R列に追加
+                p_flag = ad_info.get('p_sold_flag', '')
+                l_flag = ad_info.get('l_sold_flag', '')
+                y_flag = ad_info.get('y_sold_flag', '')
+                
+                # N, P, R のいずれかに '0' があるか確認
+                is_sold_out = '0' in [p_flag, l_flag, y_flag]
+                
+                # 新しい日付の決定
+                date_to_write = current_date
+                # 既存日付がなく、かつ売り切れフラグが立っていたら今日の日付を入れる
+                if not date_to_write and is_sold_out:
+                    date_to_write = today_str
+
+                # M～S列に追加
                 m_row = [
                     ad_info.get('p_dtlurl', ''),
-                    ad_info.get('p_sold_flag', ''),
+                    p_flag,
                     ad_info.get('l_url', ''),
-                    ad_info.get('l_sold_flag', ''),
+                    l_flag,
                     ad_info.get('y_dtlurl', ''),
-                    ad_info.get('y_sold_flag', '')
+                    y_flag,
+                    date_to_write
                 ]
                 m_data.append(m_row)
             else:
+                # 広告情報が取れなかった場合
                 l_data.append([str(building_id)])
-                m_data.append(['', '', '', '', '', ''])
+                m_data.append(['', '', '', '', '', '', current_date])
         else:
+            # Building IDが見つからなかった場合
             print(f"Not found")
             l_data.append([''])
-            m_data.append(['', '', '', '', '', ''])
+            m_data.append(['', '', '', '', '', '', current_date])
     
     print(f"\nTotal L data rows: {len(l_data)}")
     print(f"Total M data rows: {len(m_data)}")
     
     # 各広告タイプのカウント
+    # 各広告タイプのカウント（URLが存在するものをカウント）
     p_count = sum(1 for row in m_data[1:] if row[0])
     l_count = sum(1 for row in m_data[1:] if row[2])
     y_count = sum(1 for row in m_data[1:] if row[4])
@@ -171,20 +209,20 @@ def main():
         print(f"Error writing L column: {e}")
         return
     
-    # M～R列に書き込み
+    # M～S列に書き込み
     try:
         body = {'values': m_data}
         result_m = service.spreadsheets().values().update(
             spreadsheetId=spreadsheet_id,
-            range='新着物件!M1:R',
+            range='新着物件!M1:S',
             valueInputOption='RAW',
             body=body
         ).execute()
-        print(f"\n=== M～R列書き込み結果 ===")
+        print(f"\n=== M～S列書き込み結果 ===")
         print(f"Updated rows: {result_m.get('updatedRows')}")
         print(f"Updated range: {result_m.get('updatedRange')}")
     except Exception as e:
-        print(f"Error writing M:R columns: {e}")
+        print(f"Error writing M:S columns: {e}")
         return
     
     print("\n=== Process completed! ===")
