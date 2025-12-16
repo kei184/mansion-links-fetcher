@@ -117,7 +117,18 @@ def main():
         print(f"Found {len(existing_dates)} existing dates in S column")
     except Exception as e:
         print(f"Error fetching S column: {e}")
-        # エラー時は空リストとして扱う（初回実行時など）
+        pass
+
+    # L列(Building ID)の既存データを取得
+    l_column_range = '新着物件!L2:L'
+    existing_ids = []
+    try:
+        result_l = service.spreadsheets().values().get(spreadsheetId=spreadsheet_id, range=l_column_range).execute()
+        existing_l_values = result_l.get('values', [])
+        existing_ids = [row[0] if row else '' for row in existing_l_values]
+        print(f"Found {len(existing_ids)} existing IDs in L column")
+    except Exception as e:
+        print(f"Error fetching L column: {e}")
         pass
 
     # L列用データ（Building ID）
@@ -130,7 +141,18 @@ def main():
 
     for i, property_name in enumerate(property_names, 1):
         print(f"[{i}/{len(property_names)}] {property_name}", end=" -> ")
-        building_id = search_building_id(property_name)
+        
+        building_id = None
+        # 既存のIDを確認（インデックス調整）
+        if i-1 < len(existing_ids):
+            existing_id = existing_ids[i-1].strip()
+            if existing_id:
+                building_id = existing_id
+                print(f"Existing ID: {building_id}")
+        
+        # 既存IDがなければ検索
+        if not building_id:
+            building_id = search_building_id(property_name)
         
         # 既存の日付を取得（インデックス調整: property_namesはA2から、existing_datesもS2からと仮定）
         current_date = ''
