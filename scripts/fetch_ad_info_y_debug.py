@@ -81,7 +81,7 @@ def fetch_ad_info(building_id):
                     l = result_data['l']
                     project_cd = l.get('project_cd', '')
                     if project_cd:
-                        ad_info['l_url'] = f"https://www.homes.co.jp/mansion/b-{project_cd}/?cmp_id=001_08359_0008683659&utm_campaign=v6_sumulab&utm_content=001_08359_0008683659&utm_medium=cpa&utm_source=sumulab&utm_term="
+                        ad_info['l_url'] = f"https://www.homes.co.jp/mansion/b-{project_cd}/?cmp_id=001_08359_0009551273&utm_campaign=alliance_sumulab&utm_content=001_08359_0009551273&utm_medium=cpa&utm_source=sumulab&utm_term="
                     ad_info['l_sold_flag'] = str(l.get('sold_flag', ''))
                     print(f"      L found: {l}")
                 else:
@@ -123,6 +123,19 @@ def main():
     property_names = fetch_property_names(service, spreadsheet_id, input_range)
     print(f"Found {len(property_names)} properties to process\n")
     
+    
+    # L列(Building ID)の既存データを取得
+    l_column_range = '新着物件!L2:L'
+    existing_ids = []
+    try:
+        result_l = service.spreadsheets().values().get(spreadsheetId=spreadsheet_id, range=l_column_range).execute()
+        existing_l_values = result_l.get('values', [])
+        existing_ids = [row[0] if row else '' for row in existing_l_values]
+        print(f"Found {len(existing_ids)} existing IDs in L column")
+    except Exception as e:
+        print(f"Error fetching L column: {e}")
+        pass
+
     # L列用データ（Building ID）
     l_data = [['Building ID']]
     
@@ -132,7 +145,18 @@ def main():
     # 最初の3件だけ処理（デバッグ用）
     for i, property_name in enumerate(property_names[:3], 1):
         print(f"[{i}] {property_name}")
-        building_id = search_building_id(property_name)
+        
+        building_id = None
+        # 既存のIDを確認（インデックス調整）
+        if i-1 < len(existing_ids):
+            existing_id = existing_ids[i-1].strip()
+            if existing_id:
+                building_id = existing_id
+                print(f"  Existing ID: {building_id}")
+        
+        # 既存IDがなければ検索
+        if not building_id:
+            building_id = search_building_id(property_name)
         
         if building_id:
             print(f"  ID: {building_id}")

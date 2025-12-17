@@ -74,7 +74,7 @@ def fetch_ad_info(building_id):
                 l = result_data['l']
                 project_cd = l.get('project_cd', '')
                 if project_cd:
-                    ad_info['l_url'] = f"https://www.homes.co.jp/mansion/b-{project_cd}/?cmp_id=001_08359_0008683659&utm_campaign=v6_sumulab&utm_content=001_08359_0008683659&utm_medium=cpa&utm_source=sumulab&utm_term="
+                    ad_info['l_url'] = f"https://www.homes.co.jp/mansion/b-{project_cd}/?cmp_id=001_08359_0009551273&utm_campaign=alliance_sumulab&utm_content=001_08359_0009551273&utm_medium=cpa&utm_source=sumulab&utm_term="
                 ad_info['l_sold_flag'] = str(l.get('sold_flag', ''))
             
             # Y広告 - result 直下の dtlurl がそれ
