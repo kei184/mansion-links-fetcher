@@ -22,13 +22,15 @@ def fetch_property_names(service, spreadsheet_id, input_range):
     try:
         result = service.spreadsheets().values().get(spreadsheetId=spreadsheet_id, range=input_range).execute()
         values = result.get('values', [])
-        return [row[0] for row in values if row]
+        return [row[0] if row else '' for row in values]
     except Exception as e:
         print(f"Error fetching property names: {e}")
         return []
 
 def search_building_id(property_name):
     try:
+        if not property_name:
+            return None
         search_url = f"https://www.e-mansion.co.jp/bbs/estate/ajaxSearch/?q={quote(property_name)}"
         time.sleep(1)
         response = requests.get(search_url, timeout=10, headers=HEADERS)
@@ -90,7 +92,7 @@ def fetch_ad_info(building_id):
 
 def main():
     spreadsheet_id = os.environ.get('SPREADSHEET_ID')
-    input_range = os.environ.get('INPUT_RANGE', 'Sheet1!A2:A')
+    input_range = os.environ.get('INPUT_RANGE', '新着物件!B2:B')
     
     if not spreadsheet_id:
         raise ValueError("SPREADSHEET_ID is not set")
