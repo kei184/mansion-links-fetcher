@@ -79,18 +79,21 @@ def fetch_ad_info(building_id):
                     ad_info['l_url'] = f"https://www.homes.co.jp/mansion/b-{project_cd}/?cmp_id=001_08359_0009551273&utm_campaign=alliance_sumulab&utm_content=001_08359_0009551273&utm_medium=cpa&utm_source=sumulab&utm_term="
                 ad_info['l_sold_flag'] = str(l.get('sold_flag', ''))
             
-            # Y広告 - result 直下の dtlurl がそれ
-            if 'dtlurl' in result_data and result_data['dtlurl']:
-                dtlurl = result_data['dtlurl']
-                if dtlurl.startswith('https://realestate.yahoo.co.jp/new/mansion/dtl/'):
-                    # パラメータ二重付加しないようにガード
-                    if 'sc_out=mikle_mansion_official' not in dtlurl:
-                        if '?' in dtlurl:
-                            dtlurl += '&sc_out=mikle_mansion_official'
-                        else:
-                            dtlurl += '?sc_out=mikle_mansion_official'
-                    ad_info['y_dtlurl'] = dtlurl
-                    ad_info['y_sold_flag'] = str(result_data.get('sold_flag', ''))
+            # Y広告（ynew）- 専用キーから取得
+            if 'ynew' in result_data and result_data['ynew']:
+                y = result_data['ynew']
+                if isinstance(y, dict):
+                    dtlurl = y.get('dtlurl', '')
+                    if dtlurl and dtlurl.startswith('https://realestate.yahoo.co.jp/new/mansion/dtl/'):
+                        # パラメータ二重付加しないようにガード
+                        if 'sc_out=mikle_mansion_official' not in dtlurl:
+                            if '?' in dtlurl:
+                                dtlurl += '&sc_out=mikle_mansion_official'
+                            else:
+                                dtlurl += '?sc_out=mikle_mansion_official'
+                        ad_info['y_dtlurl'] = dtlurl
+                        ad_info['y_sold_flag'] = str(y.get('sold_flag', ''))
+
 
         
         return ad_info
@@ -109,28 +112,29 @@ def main():
     property_names = fetch_property_names(service, spreadsheet_id, input_range)
     print(f"Found {len(property_names)} properties to process\n")
     
-    # S列の既存データを取得
-    s_column_range = '新着物件!S2:S'
-    existing_dates = []
-    try:
-        result_s = service.spreadsheets().values().get(spreadsheetId=spreadsheet_id, range=s_column_range).execute()
-        existing_values = result_s.get('values', [])
-        existing_dates = [row[0] if row else '' for row in existing_values]
-        print(f"Found {len(existing_dates)} existing dates in S column")
-    except Exception as e:
-        print(f"Error fetching S column: {e}")
-        pass
-
-    # L列(Building ID)の既存データを取得
+    # L列とS列の既存データを取得し、Building IDで日付をマッピング
     l_column_range = '新着物件!L2:L'
-    existing_ids = []
+    s_column_range = '新着物件!S2:S'
+    date_map = {}  # {building_id: date}
+    
     try:
         result_l = service.spreadsheets().values().get(spreadsheetId=spreadsheet_id, range=l_column_range).execute()
         existing_l_values = result_l.get('values', [])
-        existing_ids = [row[0] if row else '' for row in existing_l_values]
-        print(f"Found {len(existing_ids)} existing IDs in L column")
+        
+        result_s = service.spreadsheets().values().get(spreadsheetId=spreadsheet_id, range=s_column_range).execute()
+        existing_s_values = result_s.get('values', [])
+        
+        # Building IDと日付をマッピング
+        for i in range(max(len(existing_l_values), len(existing_s_values))):
+            building_id = existing_l_values[i][0].strip() if i < len(existing_l_values) and existing_l_values[i] else ''
+            date_value = existing_s_values[i][0].strip() if i < len(existing_s_values) and existing_s_values[i] else ''
+            
+            if building_id and date_value:
+                date_map[building_id] = date_value
+        
+        print(f"Created date mapping for {len(date_map)} Building IDs")
     except Exception as e:
-        print(f"Error fetching L column: {e}")
+        print(f"Error fetching existing data: {e}")
         pass
 
     # L列用データ（Building ID）
@@ -144,26 +148,15 @@ def main():
     for i, property_name in enumerate(property_names, 1):
         print(f"[{i}/{len(property_names)}] {property_name}", end=" -> ")
         
-        building_id = None
-        # 既存のIDを確認（インデックス調整）
-        if i-1 < len(existing_ids):
-            existing_id = existing_ids[i-1].strip()
-            if existing_id:
-                building_id = existing_id
-                print(f"Existing ID: {building_id}")
-        
-        # 既存IDがなければ検索
-        if not building_id:
-            building_id = search_building_id(property_name)
-        
-        # 既存の日付を取得（インデックス調整: property_namesはA2から、existing_datesもS2からと仮定）
-        current_date = ''
-        if i-1 < len(existing_dates):
-            current_date = existing_dates[i-1]
+        # 常にBuilding IDを検索
+        building_id = search_building_id(property_name)
 
         if building_id:
             print(f"ID: {building_id}")
             ad_info = fetch_ad_info(building_id)
+            
+            # Building IDから既存の日付を取得
+            current_date = date_map.get(str(building_id), '')
             
             if ad_info:
                 # L列に追加
@@ -201,7 +194,7 @@ def main():
             # Building IDが見つからなかった場合
             print(f"Not found")
             l_data.append([''])
-            m_data.append(['', '', '', '', '', '', current_date])
+            m_data.append(['', '', '', '', '', '', ''])  # 日付も空にする
     
     print(f"\nTotal L data rows: {len(l_data)}")
     print(f"Total M data rows: {len(m_data)}")

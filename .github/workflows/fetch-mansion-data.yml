@@ -22,13 +22,16 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests google-auth-oauthlib google-auth-httplib2 google-api-python-client
       
-      - name: Fetch building IDs
-        env:
-          GOOGLE_SHEETS_CREDENTIALS: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS }}
-          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
-          INPUT_RANGE: ${{ secrets.INPUT_RANGE }}
-          OUTPUT_RANGE: '新着物件!L1'
-        run: python scripts/fetch_building_ids.py
+      
+      # Building ID lookup is now handled directly in fetch_mansion_links.py
+      # Removing this step prevents date misalignment when rows shift
+      # - name: Fetch building IDs
+      #   env:
+      #     GOOGLE_SHEETS_CREDENTIALS: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS }}
+      #     SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+      #     INPUT_RANGE: ${{ secrets.INPUT_RANGE }}
+      #     OUTPUT_RANGE: '新着物件!L1'
+      #   run: python scripts/fetch_building_ids.py
       
       - name: Fetch AD Info
         env:
