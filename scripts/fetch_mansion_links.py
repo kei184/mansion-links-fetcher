@@ -174,8 +174,8 @@ def main():
                 l_flag = ad_info.get('l_sold_flag', '')
                 y_flag = ad_info.get('y_sold_flag', '')
                 
-                # N, P, R のいずれかに '0' があるか確認
-                is_sold_out = '0' in [p_flag, l_flag, y_flag]
+                # N, P, R のいずれかが正確に '0' であるか確認
+                is_sold_out = (p_flag == '0' or l_flag == '0' or y_flag == '0')
                 
                 # 新しい日付の決定
                 date_to_write = current_date
