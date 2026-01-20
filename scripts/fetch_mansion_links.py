@@ -79,20 +79,28 @@ def fetch_ad_info(building_id):
                     ad_info['l_url'] = f"https://www.homes.co.jp/mansion/b-{project_cd}/?cmp_id=001_08359_0009551273&utm_campaign=alliance_sumulab&utm_content=001_08359_0009551273&utm_medium=cpa&utm_source=sumulab&utm_term="
                 ad_info['l_sold_flag'] = str(l.get('sold_flag', ''))
             
-            # Y広告（ynew）- 専用キーから取得
-            if 'ynew' in result_data and result_data['ynew']:
-                y = result_data['ynew']
-                if isinstance(y, dict):
-                    dtlurl = y.get('dtlurl', '')
-                    if dtlurl and dtlurl.startswith('https://realestate.yahoo.co.jp/new/mansion/dtl/'):
-                        # パラメータ二重付加しないようにガード
-                        if 'sc_out=mikle_mansion_official' not in dtlurl:
-                            if '?' in dtlurl:
-                                dtlurl += '&sc_out=mikle_mansion_official'
-                            else:
-                                dtlurl += '?sc_out=mikle_mansion_official'
-                        ad_info['y_dtlurl'] = dtlurl
-                        ad_info['y_sold_flag'] = str(y.get('sold_flag', ''))
+            
+            # Y広告 - result 直下の dtlurl を使用（元の実装）
+            # ynew キーとは異なるAPIレスポンス構造
+            if 'dtlurl' in result_data and result_data['dtlurl']:
+                dtlurl = result_data['dtlurl']
+                if dtlurl.startswith('https://realestate.yahoo.co.jp/new/mansion/dtl/'):
+                    # パラメータ二重付加しないようにガード
+                    if 'sc_out=mikle_mansion_official' not in dtlurl:
+                        if '?' in dtlurl:
+                            dtlurl += '&sc_out=mikle_mansion_official'
+                        else:
+                            dtlurl += '?sc_out=mikle_mansion_official'
+                    ad_info['y_dtlurl'] = dtlurl
+                    
+                    # sold_flag は複数ソースを確認（より堅牢に）
+                    y_sold_flag = ''
+                    if 'ynew' in result_data and isinstance(result_data['ynew'], dict):
+                        y_sold_flag = str(result_data['ynew'].get('sold_flag', ''))
+                    if not y_sold_flag and 'sold_flag' in result_data:
+                        y_sold_flag = str(result_data.get('sold_flag', ''))
+                    ad_info['y_sold_flag'] = y_sold_flag
+
 
 
         
