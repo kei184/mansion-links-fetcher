@@ -120,10 +120,15 @@ def main():
     property_names = fetch_property_names(service, spreadsheet_id, input_range)
     print(f"Found {len(property_names)} properties to process\n")
     
-    # L列とS列の既存データを取得し、Building IDで日付をマッピング
+    # L列とS列、M列、O列、Q列の既存データを取得し、Building IDでマッピング
     l_column_range = '新着物件!L2:L'
     s_column_range = '新着物件!S2:S'
+    m_column_range = '新着物件!M2:M'  # p_dtlurl
+    o_column_range = '新着物件!O2:O'  # l_url
+    q_column_range = '新着物件!Q2:Q'  # y_dtlurl
+    
     date_map = {}  # {building_id: date}
+    url_map = {}   # {building_id: {'p_dtlurl': '', 'l_url': '', 'y_dtlurl': ''}}
     
     try:
         result_l = service.spreadsheets().values().get(spreadsheetId=spreadsheet_id, range=l_column_range).execute()
@@ -132,15 +137,35 @@ def main():
         result_s = service.spreadsheets().values().get(spreadsheetId=spreadsheet_id, range=s_column_range).execute()
         existing_s_values = result_s.get('values', [])
         
-        # Building IDと日付をマッピング
-        for i in range(max(len(existing_l_values), len(existing_s_values))):
+        result_m = service.spreadsheets().values().get(spreadsheetId=spreadsheet_id, range=m_column_range).execute()
+        existing_m_values = result_m.get('values', [])
+        
+        result_o = service.spreadsheets().values().get(spreadsheetId=spreadsheet_id, range=o_column_range).execute()
+        existing_o_values = result_o.get('values', [])
+        
+        result_q = service.spreadsheets().values().get(spreadsheetId=spreadsheet_id, range=q_column_range).execute()
+        existing_q_values = result_q.get('values', [])
+        
+        # Building IDと日付、URLをマッピング
+        max_rows = max(len(existing_l_values), len(existing_s_values), len(existing_m_values), len(existing_o_values), len(existing_q_values))
+        for i in range(max_rows):
             building_id = existing_l_values[i][0].strip() if i < len(existing_l_values) and existing_l_values[i] else ''
             date_value = existing_s_values[i][0].strip() if i < len(existing_s_values) and existing_s_values[i] else ''
+            p_url = existing_m_values[i][0].strip() if i < len(existing_m_values) and existing_m_values[i] else ''
+            l_url = existing_o_values[i][0].strip() if i < len(existing_o_values) and existing_o_values[i] else ''
+            y_url = existing_q_values[i][0].strip() if i < len(existing_q_values) and existing_q_values[i] else ''
             
-            if building_id and date_value:
-                date_map[building_id] = date_value
+            if building_id:
+                if date_value:
+                    date_map[building_id] = date_value
+                url_map[building_id] = {
+                    'p_dtlurl': p_url,
+                    'l_url': l_url,
+                    'y_dtlurl': y_url
+                }
         
         print(f"Created date mapping for {len(date_map)} Building IDs")
+        print(f"Created URL mapping for {len(url_map)} Building IDs")
     except Exception as e:
         print(f"Error fetching existing data: {e}")
         pass
@@ -163,8 +188,9 @@ def main():
             print(f"ID: {building_id}")
             ad_info = fetch_ad_info(building_id)
             
-            # Building IDから既存の日付を取得
+            # Building IDから既存の日付とURLを取得
             current_date = date_map.get(str(building_id), '')
+            existing_urls = url_map.get(str(building_id), {'p_dtlurl': '', 'l_url': '', 'y_dtlurl': ''})
             
             if ad_info:
                 # L列に追加
@@ -173,6 +199,11 @@ def main():
                 p_flag = ad_info.get('p_sold_flag', '')
                 l_flag = ad_info.get('l_sold_flag', '')
                 y_flag = ad_info.get('y_sold_flag', '')
+                
+                # URLの決定: 新しいURLがあればそれを使用、なければ既存のURLを保持
+                p_url = ad_info.get('p_dtlurl', '') or existing_urls['p_dtlurl']
+                l_url = ad_info.get('l_url', '') or existing_urls['l_url']
+                y_url = ad_info.get('y_dtlurl', '') or existing_urls['y_dtlurl']
                 
                 # N, P, R のいずれかが正確に '0' であるか確認
                 is_sold_out = (p_flag == '0' or l_flag == '0' or y_flag == '0')
@@ -185,19 +216,27 @@ def main():
 
                 # M～S列に追加
                 m_row = [
-                    ad_info.get('p_dtlurl', ''),
+                    p_url,
                     p_flag,
-                    ad_info.get('l_url', ''),
+                    l_url,
                     l_flag,
-                    ad_info.get('y_dtlurl', ''),
+                    y_url,
                     y_flag,
                     date_to_write
                 ]
                 m_data.append(m_row)
             else:
-                # 広告情報が取れなかった場合
+                # 広告情報が取れなかった場合でも既存のURLを保持
                 l_data.append([str(building_id)])
-                m_data.append(['', '', '', '', '', '', current_date])
+                m_data.append([
+                    existing_urls['p_dtlurl'],
+                    '',
+                    existing_urls['l_url'],
+                    '',
+                    existing_urls['y_dtlurl'],
+                    '',
+                    current_date
+                ])
         else:
             # Building IDが見つからなかった場合
             print(f"Not found")
