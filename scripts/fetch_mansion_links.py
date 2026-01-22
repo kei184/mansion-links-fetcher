@@ -68,8 +68,8 @@ def fetch_ad_info(building_id):
             # 純広告（P） - result.p キー
             if 'p' in result_data and isinstance(result_data['p'], dict) and result_data['p']:
                 p = result_data['p']
-                ad_info['p_dtlurl'] = str(p.get('dtlurl', ''))
-                ad_info['p_sold_flag'] = str(p.get('sold_flag', ''))
+                ad_info['p_dtlurl'] = str(p.get('dtlurl') or '')
+                ad_info['p_sold_flag'] = str(p.get('sold_flag') or '')
             
             # L広告（L） - result.l キー
             if 'l' in result_data and isinstance(result_data['l'], dict) and result_data['l']:
@@ -77,7 +77,7 @@ def fetch_ad_info(building_id):
                 project_cd = l.get('project_cd', '')
                 if project_cd:
                     ad_info['l_url'] = f"https://www.homes.co.jp/mansion/b-{project_cd}/?cmp_id=001_08359_0009551273&utm_campaign=alliance_sumulab&utm_content=001_08359_0009551273&utm_medium=cpa&utm_source=sumulab&utm_term="
-                ad_info['l_sold_flag'] = str(l.get('sold_flag', ''))
+                ad_info['l_sold_flag'] = str(l.get('sold_flag') or '')
             
             
             # Y広告の処理
@@ -97,17 +97,21 @@ def fetch_ad_info(building_id):
             y_sold_flag = ''
             # 1. ynew キーを確認
             if 'ynew' in result_data and isinstance(result_data['ynew'], dict):
-                y_sold_flag = str(result_data['ynew'].get('sold_flag', ''))
+                y_sold_flag = str(result_data['ynew'].get('sold_flag') or '')
             # 2. a キーを確認（新しく追加）
             if not y_sold_flag and 'a' in result_data and isinstance(result_data['a'], dict):
-                y_sold_flag = str(result_data['a'].get('sold_flag', ''))
+                y_sold_flag = str(result_data['a'].get('sold_flag') or '')
             # 3. result 直下を確認
             if not y_sold_flag and 'sold_flag' in result_data:
-                y_sold_flag = str(result_data.get('sold_flag', ''))
+                # Noneが'None'にならないように処理
+                flag_value = result_data.get('sold_flag')
+                if flag_value is not None:
+                    y_sold_flag = str(flag_value)
             
             # sold_flagが取得できた場合のみ設定
             if y_sold_flag:
                 ad_info['y_sold_flag'] = y_sold_flag
+
 
 
 
