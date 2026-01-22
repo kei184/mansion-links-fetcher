@@ -135,15 +135,17 @@ def main():
     property_names = fetch_property_names(service, spreadsheet_id, input_range)
     print(f"Found {len(property_names)} properties to process\n")
     
-    # L列とS列、M列、O列、Q列の既存データを取得し、Building IDでマッピング
+    # L列とS列、M列、O列、Q列、B列の既存データを取得
     l_column_range = '新着物件!L2:L'
     s_column_range = '新着物件!S2:S'
     m_column_range = '新着物件!M2:M'  # p_dtlurl
     o_column_range = '新着物件!O2:O'  # l_url
     q_column_range = '新着物件!Q2:Q'  # y_dtlurl
+    b_column_range = '新着物件!B2:B'  # 物件名
     
     date_map = {}  # {building_id: date}
     url_map = {}   # {building_id: {'p_dtlurl': '', 'l_url': '', 'y_dtlurl': ''}}
+    property_building_map = {}  # {property_name: building_id} - 物件名とBuilding IDの対応
     
     try:
         result_l = service.spreadsheets().values().get(spreadsheetId=spreadsheet_id, range=l_column_range).execute()
@@ -161,14 +163,18 @@ def main():
         result_q = service.spreadsheets().values().get(spreadsheetId=spreadsheet_id, range=q_column_range).execute()
         existing_q_values = result_q.get('values', [])
         
-        # Building IDと日付、URLをマッピング
-        max_rows = max(len(existing_l_values), len(existing_s_values), len(existing_m_values), len(existing_o_values), len(existing_q_values))
+        result_b = service.spreadsheets().values().get(spreadsheetId=spreadsheet_id, range=b_column_range).execute()
+        existing_b_values = result_b.get('values', [])
+        
+        # Building IDと日付、URL、物件名をマッピング
+        max_rows = max(len(existing_l_values), len(existing_s_values), len(existing_m_values), len(existing_o_values), len(existing_q_values), len(existing_b_values))
         for i in range(max_rows):
             building_id = existing_l_values[i][0].strip() if i < len(existing_l_values) and existing_l_values[i] else ''
             date_value = existing_s_values[i][0].strip() if i < len(existing_s_values) and existing_s_values[i] else ''
             p_url = existing_m_values[i][0].strip() if i < len(existing_m_values) and existing_m_values[i] else ''
             l_url = existing_o_values[i][0].strip() if i < len(existing_o_values) and existing_o_values[i] else ''
             y_url = existing_q_values[i][0].strip() if i < len(existing_q_values) and existing_q_values[i] else ''
+            property_name = existing_b_values[i][0].strip() if i < len(existing_b_values) and existing_b_values[i] else ''
             
             if building_id:
                 if date_value:
@@ -178,9 +184,13 @@ def main():
                     'l_url': l_url,
                     'y_dtlurl': y_url
                 }
+                # 物件名とBuilding IDの対応を記録
+                if property_name:
+                    property_building_map[property_name] = building_id
         
         print(f"Created date mapping for {len(date_map)} Building IDs")
         print(f"Created URL mapping for {len(url_map)} Building IDs")
+        print(f"Created property-building mapping for {len(property_building_map)} properties")
     except Exception as e:
         print(f"Error fetching existing data: {e}")
         pass
@@ -196,11 +206,14 @@ def main():
     for i, property_name in enumerate(property_names, 1):
         print(f"[{i}/{len(property_names)}] {property_name}", end=" -> ")
         
-        # 常にBuilding IDを検索
-        building_id = search_building_id(property_name)
+        # 既存のBuilding IDがあればそれを使用、なければ検索
+        building_id = property_building_map.get(property_name)
+        if building_id:
+            print(f"ID: {building_id} (cached)")
+        else:
+            building_id = search_building_id(property_name)
 
         if building_id:
-            print(f"ID: {building_id}")
             ad_info = fetch_ad_info(building_id)
             
             # Building IDから既存の日付とURLを取得
