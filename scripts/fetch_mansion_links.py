@@ -81,7 +81,7 @@ def fetch_ad_info(building_id):
             
             
             # Y広告の処理
-            # パターン1: result 直下の dtlurl が存在する場合
+            # dtlurl が存在する場合のみYahoo URLを記録（実際に掲載がある場合）
             if 'dtlurl' in result_data and result_data['dtlurl']:
                 dtlurl = result_data['dtlurl']
                 if dtlurl.startswith('https://realestate.yahoo.co.jp/new/mansion/dtl/'):
@@ -92,14 +92,6 @@ def fetch_ad_info(building_id):
                         else:
                             dtlurl += '?sc_out=mikle_mansion_official'
                     ad_info['y_dtlurl'] = dtlurl
-            
-            # パターン2: dtlurlがない場合、buildingi dからURL生成を試みる
-            if not ad_info['y_dtlurl'] and 'buildingid' in result_data and result_data['buildingid']:
-                buildingid = str(result_data['buildingid']).strip()
-                if buildingid:
-                    # buildingi dを使ってYahoo不動産のURLを生成
-                    generated_url = f"https://realestate.yahoo.co.jp/new/mansion/dtl/{buildingid}/?sc_out=mikle_mansion_official"
-                    ad_info['y_dtlurl'] = generated_url
             
             # sold_flag は複数ソースを確認（dtlurlの有無に関わらず）
             y_sold_flag = ''
