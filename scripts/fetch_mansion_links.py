@@ -80,8 +80,8 @@ def fetch_ad_info(building_id):
                 ad_info['l_sold_flag'] = str(l.get('sold_flag', ''))
             
             
-            # Y広告 - result 直下の dtlurl を使用（元の実装）
-            # ynew キーとは異なるAPIレスポンス構造
+            # Y広告の処理
+            # パターン1: result 直下の dtlurl が存在する場合
             if 'dtlurl' in result_data and result_data['dtlurl']:
                 dtlurl = result_data['dtlurl']
                 if dtlurl.startswith('https://realestate.yahoo.co.jp/new/mansion/dtl/'):
@@ -92,14 +92,24 @@ def fetch_ad_info(building_id):
                         else:
                             dtlurl += '?sc_out=mikle_mansion_official'
                     ad_info['y_dtlurl'] = dtlurl
-                    
-                    # sold_flag は複数ソースを確認（より堅牢に）
-                    y_sold_flag = ''
-                    if 'ynew' in result_data and isinstance(result_data['ynew'], dict):
-                        y_sold_flag = str(result_data['ynew'].get('sold_flag', ''))
-                    if not y_sold_flag and 'sold_flag' in result_data:
-                        y_sold_flag = str(result_data.get('sold_flag', ''))
-                    ad_info['y_sold_flag'] = y_sold_flag
+            
+            # sold_flag は複数ソースを確認（dtlurlの有無に関わらず）
+            y_sold_flag = ''
+            # 1. ynew キーを確認
+            if 'ynew' in result_data and isinstance(result_data['ynew'], dict):
+                y_sold_flag = str(result_data['ynew'].get('sold_flag', ''))
+            # 2. a キーを確認（新しく追加）
+            if not y_sold_flag and 'a' in result_data and isinstance(result_data['a'], dict):
+                y_sold_flag = str(result_data['a'].get('sold_flag', ''))
+            # 3. result 直下を確認
+            if not y_sold_flag and 'sold_flag' in result_data:
+                y_sold_flag = str(result_data.get('sold_flag', ''))
+            
+            # sold_flagが取得できた場合のみ設定
+            if y_sold_flag:
+                ad_info['y_sold_flag'] = y_sold_flag
+
+
 
 
 
