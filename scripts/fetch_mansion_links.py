@@ -81,7 +81,22 @@ def fetch_ad_info(building_id):
             
             
             # Y広告の処理
-            # dtlurl が存在する場合のみYahoo URLを記録（実際に掲載がある場合）
+            # まずsold_flagを取得
+            y_sold_flag = ''
+            # 1. ynew キーを確認
+            if 'ynew' in result_data and isinstance(result_data['ynew'], dict):
+                y_sold_flag = str(result_data['ynew'].get('sold_flag') or '')
+            # 2. a キーを確認
+            if not y_sold_flag and 'a' in result_data and isinstance(result_data['a'], dict):
+                y_sold_flag = str(result_data['a'].get('sold_flag') or '')
+            # 3. result 直下を確認
+            if not y_sold_flag and 'sold_flag' in result_data:
+                # Noneが'None'にならないように処理
+                flag_value = result_data.get('sold_flag')
+                if flag_value is not None:
+                    y_sold_flag = str(flag_value)
+            
+            # dtlurlを取得（優先）
             if 'dtlurl' in result_data and result_data['dtlurl']:
                 dtlurl = result_data['dtlurl']
                 if dtlurl.startswith('https://realestate.yahoo.co.jp/new/mansion/dtl/'):
@@ -93,24 +108,17 @@ def fetch_ad_info(building_id):
                             dtlurl += '?sc_out=mikle_mansion_official'
                     ad_info['y_dtlurl'] = dtlurl
             
-            # sold_flag は複数ソースを確認（dtlurlの有無に関わらず）
-            y_sold_flag = ''
-            # 1. ynew キーを確認
-            if 'ynew' in result_data and isinstance(result_data['ynew'], dict):
-                y_sold_flag = str(result_data['ynew'].get('sold_flag') or '')
-            # 2. a キーを確認（新しく追加）
-            if not y_sold_flag and 'a' in result_data and isinstance(result_data['a'], dict):
-                y_sold_flag = str(result_data['a'].get('sold_flag') or '')
-            # 3. result 直下を確認
-            if not y_sold_flag and 'sold_flag' in result_data:
-                # Noneが'None'にならないように処理
-                flag_value = result_data.get('sold_flag')
-                if flag_value is not None:
-                    y_sold_flag = str(flag_value)
+            # dtlurlがなく、sold_flagがある場合、buildingi dからURL生成
+            if not ad_info['y_dtlurl'] and y_sold_flag and 'buildingid' in result_data and result_data['buildingid']:
+                buildingid = str(result_data['buildingid']).strip()
+                if buildingid:
+                    generated_url = f"https://realestate.yahoo.co.jp/new/mansion/dtl/{buildingid}/?sc_out=mikle_mansion_official"
+                    ad_info['y_dtlurl'] = generated_url
             
             # sold_flagが取得できた場合のみ設定
             if y_sold_flag:
                 ad_info['y_sold_flag'] = y_sold_flag
+
 
 
 
