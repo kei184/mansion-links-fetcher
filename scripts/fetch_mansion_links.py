@@ -96,17 +96,27 @@ def fetch_ad_info(building_id):
                 if flag_value is not None:
                     y_sold_flag = str(flag_value)
             
-            # dtlurlを取得（優先）
-            if 'dtlurl' in result_data and result_data['dtlurl']:
-                dtlurl = result_data['dtlurl']
-                if dtlurl.startswith('https://realestate.yahoo.co.jp/new/mansion/dtl/'):
-                    # パラメータ二重付加しないようにガード
-                    if 'sc_out=mikle_mansion_official' not in dtlurl:
-                        if '?' in dtlurl:
-                            dtlurl += '&sc_out=mikle_mansion_official'
-                        else:
-                            dtlurl += '?sc_out=mikle_mansion_official'
-                    ad_info['y_dtlurl'] = dtlurl
+            # dtlurlを取得（複数の場所を確認）
+            dtlurl = ''
+            # 1. ynew キー内の dtlurl を確認
+            if 'ynew' in result_data and isinstance(result_data['ynew'], dict):
+                dtlurl = result_data['ynew'].get('dtlurl', '')
+            # 2. a キー内の dtlurl を確認
+            if not dtlurl and 'a' in result_data and isinstance(result_data['a'], dict):
+                dtlurl = result_data['a'].get('dtlurl', '')
+            # 3. result 直下の dtlurl を確認
+            if not dtlurl and 'dtlurl' in result_data:
+                dtlurl = result_data.get('dtlurl', '')
+            
+            # dtlurlが取得できた場合、パラメータを追加
+            if dtlurl and dtlurl.startswith('https://realestate.yahoo.co.jp/new/mansion/dtl/'):
+                # パラメータ二重付加しないようにガード
+                if 'sc_out=mikle_mansion_official' not in dtlurl:
+                    if '?' in dtlurl:
+                        dtlurl += '&sc_out=mikle_mansion_official'
+                    else:
+                        dtlurl += '?sc_out=mikle_mansion_official'
+                ad_info['y_dtlurl'] = dtlurl
             
             # sold_flagが取得できた場合のみ設定
             if y_sold_flag:
