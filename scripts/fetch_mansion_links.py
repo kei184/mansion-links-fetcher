@@ -108,13 +108,6 @@ def fetch_ad_info(building_id):
                             dtlurl += '?sc_out=mikle_mansion_official'
                     ad_info['y_dtlurl'] = dtlurl
             
-            # dtlurlがなく、sold_flagがある場合、buildingi dからURL生成
-            if not ad_info['y_dtlurl'] and y_sold_flag and 'buildingid' in result_data and result_data['buildingid']:
-                buildingid = str(result_data['buildingid']).strip()
-                if buildingid:
-                    generated_url = f"https://realestate.yahoo.co.jp/new/mansion/dtl/{buildingid}/?sc_out=mikle_mansion_official"
-                    ad_info['y_dtlurl'] = generated_url
-            
             # sold_flagが取得できた場合のみ設定
             if y_sold_flag:
                 ad_info['y_sold_flag'] = y_sold_flag
