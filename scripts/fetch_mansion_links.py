@@ -244,19 +244,18 @@ def main():
                 l_url = ad_info.get('l_url', '') or existing_urls['l_url']
                 y_url = ad_info.get('y_dtlurl', '') or existing_urls['y_dtlurl']
                 
-                # 売り切れ判定: URLがあり、sold_flagが '0' (掲載中) 以外の値の場合
-                # sold_flag='0' → 掲載中、sold_flag='1'等 → 売り切れ
-                is_sold_out = False
-                if p_url and p_flag and p_flag != '0':
-                    is_sold_out = True
-                if l_url and l_flag and l_flag != '0':
-                    is_sold_out = True
-                if y_url and y_flag and y_flag != '0':
-                    is_sold_out = True
+                # 掲載中判定: URLがあり、sold_flagが '0' (掲載中) の場合
+                is_on_sale = False
+                if p_url and p_flag == '0':
+                    is_on_sale = True
+                if l_url and l_flag == '0':
+                    is_on_sale = True
+                if y_url and y_flag == '0':
+                    is_on_sale = True
                 
-                # 日付の決定: 既存の日付を保持、売り切れが初めて検出されたら今日の日付
+                # 日付の決定: 既存の日付を保持、初めて掲載開始されたら今日の日付
                 date_to_write = current_date
-                if not date_to_write and is_sold_out:
+                if not date_to_write and is_on_sale:
                     date_to_write = today_str
 
                 # M～S列に追加
