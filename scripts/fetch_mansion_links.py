@@ -80,43 +80,46 @@ def fetch_ad_info(building_id):
                 ad_info['l_sold_flag'] = str(l.get('sold_flag') or '')
             
             
-            # Y広告の処理
-            # まずsold_flagを取得
+            # Y広告の処理（dtlurlとsold_flagをペアで取得）
+            y_dtlurl = ''
             y_sold_flag = ''
+            
             # 1. ynew キーを確認
             if 'ynew' in result_data and isinstance(result_data['ynew'], dict):
-                y_sold_flag = str(result_data['ynew'].get('sold_flag') or '')
-            # 2. a キーを確認
-            if not y_sold_flag and 'a' in result_data and isinstance(result_data['a'], dict):
-                y_sold_flag = str(result_data['a'].get('sold_flag') or '')
-            # 3. result 直下を確認
-            if not y_sold_flag and 'sold_flag' in result_data:
-                # Noneが'None'にならないように処理
-                flag_value = result_data.get('sold_flag')
-                if flag_value is not None:
-                    y_sold_flag = str(flag_value)
-            
-            # dtlurlを取得（複数の場所を確認）
-            dtlurl = ''
-            # 1. ynew キー内の dtlurl を確認
-            if 'ynew' in result_data and isinstance(result_data['ynew'], dict):
                 dtlurl = result_data['ynew'].get('dtlurl', '')
-            # 2. a キー内の dtlurl を確認
-            if not dtlurl and 'a' in result_data and isinstance(result_data['a'], dict):
+                if dtlurl:
+                    y_dtlurl = dtlurl
+                    sold_flag = result_data['ynew'].get('sold_flag')
+                    if sold_flag is not None:
+                        y_sold_flag = str(sold_flag)
+            
+            # 2. a キーを確認（ynewで取得できなかった場合のみ）
+            if not y_dtlurl and 'a' in result_data and isinstance(result_data['a'], dict):
                 dtlurl = result_data['a'].get('dtlurl', '')
-            # 3. result 直下の dtlurl を確認
-            if not dtlurl and 'dtlurl' in result_data:
+                if dtlurl:
+                    y_dtlurl = dtlurl
+                    sold_flag = result_data['a'].get('sold_flag')
+                    if sold_flag is not None:
+                        y_sold_flag = str(sold_flag)
+            
+            # 3. result 直下を確認（ynewとaで取得できなかった場合のみ）
+            if not y_dtlurl and 'dtlurl' in result_data:
                 dtlurl = result_data.get('dtlurl', '')
+                if dtlurl:
+                    y_dtlurl = dtlurl
+                    sold_flag = result_data.get('sold_flag')
+                    if sold_flag is not None:
+                        y_sold_flag = str(sold_flag)
             
             # dtlurlが取得できた場合、パラメータを追加
-            if dtlurl and dtlurl.startswith('https://realestate.yahoo.co.jp/new/mansion/dtl/'):
+            if y_dtlurl and y_dtlurl.startswith('https://realestate.yahoo.co.jp/new/mansion/dtl/'):
                 # パラメータ二重付加しないようにガード
-                if 'sc_out=mikle_mansion_official' not in dtlurl:
-                    if '?' in dtlurl:
-                        dtlurl += '&sc_out=mikle_mansion_official'
+                if 'sc_out=mikle_mansion_official' not in y_dtlurl:
+                    if '?' in y_dtlurl:
+                        y_dtlurl += '&sc_out=mikle_mansion_official'
                     else:
-                        dtlurl += '?sc_out=mikle_mansion_official'
-                ad_info['y_dtlurl'] = dtlurl
+                        y_dtlurl += '?sc_out=mikle_mansion_official'
+                ad_info['y_dtlurl'] = y_dtlurl
             
             # sold_flagが取得できた場合のみ設定
             if y_sold_flag:
