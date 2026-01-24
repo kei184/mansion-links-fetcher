@@ -111,19 +111,27 @@ def fetch_ad_info(building_id):
                     if sold_flag is not None:
                         y_sold_flag = str(sold_flag)
             
-            # Yahoo不動産のURLの場合のみad_infoに設定
-            if y_dtlurl and y_dtlurl.startswith('https://realestate.yahoo.co.jp/new/mansion/dtl/'):
-                # パラメータ二重付加しないようにガード
-                if 'sc_out=mikle_mansion_official' not in y_dtlurl:
-                    if '?' in y_dtlurl:
-                        y_dtlurl += '&sc_out=mikle_mansion_official'
-                    else:
-                        y_dtlurl += '?sc_out=mikle_mansion_official'
+            # Yahoo不動産のURLかどうかを判定（新旧両形式をサポート）
+            if y_dtlurl:
+                is_yahoo_url = (
+                    y_dtlurl.startswith('https://realestate.yahoo.co.jp/new/mansion/dtl/') or
+                    y_dtlurl.startswith('http://new.realestate.yahoo.co.jp/mansion/')
+                )
                 
-                # URLとsold_flagをペアで設定
-                ad_info['y_dtlurl'] = y_dtlurl
-                if y_sold_flag:
-                    ad_info['y_sold_flag'] = y_sold_flag
+                if is_yahoo_url:
+                    # 新形式のYahoo不動産URLの場合のみパラメータを追加
+                    if y_dtlurl.startswith('https://realestate.yahoo.co.jp/new/mansion/dtl/'):
+                        # パラメータ二重付加しないようにガード
+                        if 'sc_out=mikle_mansion_official' not in y_dtlurl:
+                            if '?' in y_dtlurl:
+                                y_dtlurl += '&sc_out=mikle_mansion_official'
+                            else:
+                                y_dtlurl += '?sc_out=mikle_mansion_official'
+                    
+                    # URLとsold_flagをペアで設定
+                    ad_info['y_dtlurl'] = y_dtlurl
+                    if y_sold_flag:
+                        ad_info['y_sold_flag'] = y_sold_flag
 
 
 
