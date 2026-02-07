@@ -164,13 +164,9 @@ def main():
     property_names = fetch_property_names(service, spreadsheet_id, input_range)
     print(f"Found {len(property_names)} properties to process\n")
     
-    # L列とS列、M列、O列、Q列、T列、B列の既存データを取得
-    l_column_range = '新着物件!L2:L'
-    s_column_range = '新着物件!S2:S'  # first_sold_out_date
-    m_column_range = '新着物件!M2:M'  # p_dtlurl
-    o_column_range = '新着物件!O2:O'  # l_url
-    q_column_range = '新着物件!Q2:Q'  # y_dtlurl
-    t_column_range = '新着物件!T2:T'  # entry_id (新規)
+    # L列とM～T列、B列の既存データを取得
+    l_column_range = '新着物件!L2:L'  # Building ID
+    mt_column_range = '新着物件!M2:T'  # M～T列の全データ (p_dtlurl, p_sold_flag, l_url, l_sold_flag, y_dtlurl, y_sold_flag, first_sold_out_date, entry_id)
     b_column_range = '新着物件!B2:B'  # 物件名
     
     date_map = {}  # {building_id: date}
@@ -182,34 +178,28 @@ def main():
         result_l = service.spreadsheets().values().get(spreadsheetId=spreadsheet_id, range=l_column_range).execute()
         existing_l_values = result_l.get('values', [])
         
-        result_s = service.spreadsheets().values().get(spreadsheetId=spreadsheet_id, range=s_column_range).execute()
-        existing_s_values = result_s.get('values', [])
-        
-        result_m = service.spreadsheets().values().get(spreadsheetId=spreadsheet_id, range=m_column_range).execute()
-        existing_m_values = result_m.get('values', [])
-        
-        result_o = service.spreadsheets().values().get(spreadsheetId=spreadsheet_id, range=o_column_range).execute()
-        existing_o_values = result_o.get('values', [])
-        
-        result_q = service.spreadsheets().values().get(spreadsheetId=spreadsheet_id, range=q_column_range).execute()
-        existing_q_values = result_q.get('values', [])
-        
-        result_t = service.spreadsheets().values().get(spreadsheetId=spreadsheet_id, range=t_column_range).execute()
-        existing_t_values = result_t.get('values', [])
+        result_mt = service.spreadsheets().values().get(spreadsheetId=spreadsheet_id, range=mt_column_range).execute()
+        existing_mt_values = result_mt.get('values', [])
         
         result_b = service.spreadsheets().values().get(spreadsheetId=spreadsheet_id, range=b_column_range).execute()
         existing_b_values = result_b.get('values', [])
         
         # Building IDと日付、URL、entry_id、物件名をマッピング
-        max_rows = max(len(existing_l_values), len(existing_s_values), len(existing_m_values), len(existing_o_values), len(existing_q_values), len(existing_t_values), len(existing_b_values))
+        max_rows = max(len(existing_l_values), len(existing_mt_values), len(existing_b_values))
         for i in range(max_rows):
             building_id = existing_l_values[i][0].strip() if i < len(existing_l_values) and existing_l_values[i] else ''
-            date_value = existing_s_values[i][0].strip() if i < len(existing_s_values) and existing_s_values[i] else ''
-            p_url = existing_m_values[i][0].strip() if i < len(existing_m_values) and existing_m_values[i] else ''
-            l_url = existing_o_values[i][0].strip() if i < len(existing_o_values) and existing_o_values[i] else ''
-            y_url = existing_q_values[i][0].strip() if i < len(existing_q_values) and existing_q_values[i] else ''
-            entry_id = existing_t_values[i][0].strip() if i < len(existing_t_values) and existing_t_values[i] else ''
             property_name = existing_b_values[i][0].strip() if i < len(existing_b_values) and existing_b_values[i] else ''
+            
+            # M～T列のデータを取得 (8列: p_dtlurl, p_sold_flag, l_url, l_sold_flag, y_dtlurl, y_sold_flag, first_sold_out_date, entry_id)
+            mt_row = existing_mt_values[i] if i < len(existing_mt_values) else []
+            p_url = mt_row[0].strip() if len(mt_row) > 0 and mt_row[0] else ''
+            # p_sold_flag = mt_row[1] (使用しないのでスキップ)
+            l_url = mt_row[2].strip() if len(mt_row) > 2 and mt_row[2] else ''
+            # l_sold_flag = mt_row[3] (使用しないのでスキップ)
+            y_url = mt_row[4].strip() if len(mt_row) > 4 and mt_row[4] else ''
+            # y_sold_flag = mt_row[5] (使用しないのでスキップ)
+            date_value = mt_row[6].strip() if len(mt_row) > 6 and mt_row[6] else ''
+            entry_id = mt_row[7].strip() if len(mt_row) > 7 and mt_row[7] else ''
             
             if building_id:
                 if date_value:
@@ -237,6 +227,7 @@ def main():
     l_data = [['Building ID']]
     
     # M～T列用データ（広告情報 + 日付 + entry_id）
+    # M列: p_dtlurl, N列: p_sold_flag, O列: l_url, P列: l_sold_flag, Q列: y_dtlurl, R列: y_sold_flag, S列: first_sold_out_date, T列: entry_id
     m_data = [['p_dtlurl', 'p_sold_flag', 'l_url', 'l_sold_flag', 'y_dtlurl', 'y_sold_flag', 'first_sold_out_date', 'entry_id']]
     
     today_str = datetime.now().strftime('%Y/%m/%d')
