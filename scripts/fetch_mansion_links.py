@@ -164,48 +164,41 @@ def main():
     property_names = fetch_property_names(service, spreadsheet_id, input_range)
     print(f"Found {len(property_names)} properties to process\n")
     
-    # L列とM～T列、B列の既存データを取得
+    # L列とM～S列、B列の既存データを取得
     l_column_range = '新着物件!L2:L'  # Building ID
-    mt_column_range = '新着物件!M2:T'  # M～T列の全データ (p_dtlurl, p_sold_flag, l_url, l_sold_flag, y_dtlurl, y_sold_flag, first_sold_out_date, entry_id)
+    ms_column_range = '新着物件!M2:S'  # M～S列の全データ (p_dtlurl, p_sold_flag, l_url, l_sold_flag, y_dtlurl, y_sold_flag, first_sold_out_date)
     b_column_range = '新着物件!B2:B'  # 物件名
-    
+
     date_map = {}  # {building_id: date}
     url_map = {}   # {building_id: {'p_dtlurl': '', 'l_url': '', 'y_dtlurl': ''}}
-    entry_id_map = {}  # {building_id: entry_id}
     property_building_map = {}  # {property_name: building_id} - 物件名とBuilding IDの対応
     
     try:
         result_l = service.spreadsheets().values().get(spreadsheetId=spreadsheet_id, range=l_column_range).execute()
         existing_l_values = result_l.get('values', [])
         
-        result_mt = service.spreadsheets().values().get(spreadsheetId=spreadsheet_id, range=mt_column_range).execute()
-        existing_mt_values = result_mt.get('values', [])
+        result_ms = service.spreadsheets().values().get(spreadsheetId=spreadsheet_id, range=ms_column_range).execute()
+        existing_ms_values = result_ms.get('values', [])
         
         result_b = service.spreadsheets().values().get(spreadsheetId=spreadsheet_id, range=b_column_range).execute()
         existing_b_values = result_b.get('values', [])
         
-        # Building IDと日付、URL、entry_id、物件名をマッピング
-        max_rows = max(len(existing_l_values), len(existing_mt_values), len(existing_b_values))
+        # Building IDと日付、URL、物件名をマッピング
+        max_rows = max(len(existing_l_values), len(existing_ms_values), len(existing_b_values))
         for i in range(max_rows):
             building_id = existing_l_values[i][0].strip() if i < len(existing_l_values) and existing_l_values[i] else ''
             property_name = existing_b_values[i][0].strip() if i < len(existing_b_values) and existing_b_values[i] else ''
-            
-            # M～T列のデータを取得 (8列: p_dtlurl, p_sold_flag, l_url, l_sold_flag, y_dtlurl, y_sold_flag, first_sold_out_date, entry_id)
-            mt_row = existing_mt_values[i] if i < len(existing_mt_values) else []
-            p_url = mt_row[0].strip() if len(mt_row) > 0 and mt_row[0] else ''
-            # p_sold_flag = mt_row[1] (使用しないのでスキップ)
-            l_url = mt_row[2].strip() if len(mt_row) > 2 and mt_row[2] else ''
-            # l_sold_flag = mt_row[3] (使用しないのでスキップ)
-            y_url = mt_row[4].strip() if len(mt_row) > 4 and mt_row[4] else ''
-            # y_sold_flag = mt_row[5] (使用しないのでスキップ)
-            date_value = mt_row[6].strip() if len(mt_row) > 6 and mt_row[6] else ''
-            entry_id = mt_row[7].strip() if len(mt_row) > 7 and mt_row[7] else ''
-            
+
+            # M～S列のデータを取得 (7列: p_dtlurl, p_sold_flag, l_url, l_sold_flag, y_dtlurl, y_sold_flag, first_sold_out_date)
+            ms_row = existing_ms_values[i] if i < len(existing_ms_values) else []
+            p_url = ms_row[0].strip() if len(ms_row) > 0 and ms_row[0] else ''
+            l_url = ms_row[2].strip() if len(ms_row) > 2 and ms_row[2] else ''
+            y_url = ms_row[4].strip() if len(ms_row) > 4 and ms_row[4] else ''
+            date_value = ms_row[6].strip() if len(ms_row) > 6 and ms_row[6] else ''
+
             if building_id:
                 if date_value:
                     date_map[building_id] = date_value
-                if entry_id:
-                    entry_id_map[building_id] = entry_id
                 url_map[building_id] = {
                     'p_dtlurl': p_url,
                     'l_url': l_url,
@@ -214,21 +207,23 @@ def main():
                 # 物件名とBuilding IDの対応を記録
                 if property_name:
                     property_building_map[property_name] = building_id
-        
+
         print(f"Created date mapping for {len(date_map)} Building IDs")
         print(f"Created URL mapping for {len(url_map)} Building IDs")
-        print(f"Created entry_id mapping for {len(entry_id_map)} Building IDs")
         print(f"Created property-building mapping for {len(property_building_map)} properties")
     except Exception as e:
         print(f"Error fetching existing data: {e}")
         pass
 
+    # C列用データ（スレURL）
+    c_data = [['スレURL']]
+
     # L列用データ（Building ID）
     l_data = [['Building ID']]
-    
-    # M～T列用データ（広告情報 + 日付 + entry_id）
-    # M列: p_dtlurl, N列: p_sold_flag, O列: l_url, P列: l_sold_flag, Q列: y_dtlurl, R列: y_sold_flag, S列: first_sold_out_date, T列: entry_id
-    m_data = [['p_dtlurl', 'p_sold_flag', 'l_url', 'l_sold_flag', 'y_dtlurl', 'y_sold_flag', 'first_sold_out_date', 'entry_id']]
+
+    # M～S列用データ（広告情報 + 日付）
+    # M列: p_dtlurl, N列: p_sold_flag, O列: l_url, P列: l_sold_flag, Q列: y_dtlurl, R列: y_sold_flag, S列: first_sold_out_date
+    m_data = [['p_dtlurl', 'p_sold_flag', 'l_url', 'l_sold_flag', 'y_dtlurl', 'y_sold_flag', 'first_sold_out_date']]
     
     today_str = datetime.now().strftime('%Y/%m/%d')
 
@@ -245,17 +240,18 @@ def main():
         if building_id:
             ad_info = fetch_ad_info(building_id)
             
-            # Building IDから既存の日付、URL、entry_idを取得
+            # Building IDから既存の日付、URLを取得
             current_date = date_map.get(str(building_id), '')
             existing_urls = url_map.get(str(building_id), {'p_dtlurl': '', 'l_url': '', 'y_dtlurl': ''})
-            existing_entry_id = entry_id_map.get(str(building_id), '')
-            
+
             if ad_info:
                 # L列に追加
                 l_data.append([str(building_id)])
-                
-                # entry_idの決定: 新しいentry_idがあればそれを使用、なければ既存のentry_idを保持
-                entry_id = ad_info.get('entry_id', '') or existing_entry_id
+
+                # C列にスレURLを追加（APIから取得したentry_idを使用）
+                entry_id = ad_info.get('entry_id', '')
+                thread_url = f"https://www.e-mansion.co.jp/bbs/thread/{entry_id}/" if entry_id else ''
+                c_data.append([thread_url])
                 
                 p_flag = ad_info.get('p_sold_flag', '')
                 l_flag = ad_info.get('l_sold_flag', '')
@@ -280,7 +276,7 @@ def main():
                 if not date_to_write and is_on_sale:
                     date_to_write = today_str
 
-                # M～T列に追加
+                # M～S列に追加
                 m_row = [
                     p_url,
                     p_flag,
@@ -288,12 +284,11 @@ def main():
                     l_flag,
                     y_url,
                     y_flag,
-                    date_to_write,
-                    entry_id
+                    date_to_write
                 ]
                 m_data.append(m_row)
             else:
-                # 広告情報が取れなかった場合でも既存のURLとentry_idを保持
+                # 広告情報が取れなかった場合でも既存のURLを保持
                 l_data.append([str(building_id)])
                 m_data.append([
                     existing_urls['p_dtlurl'],
@@ -302,31 +297,49 @@ def main():
                     '',
                     existing_urls['y_dtlurl'],
                     '',
-                    current_date,
-                    existing_entry_id
+                    current_date
                 ])
+                # C列にスレURLを追加（entry_idが取得できないので空）
+                c_data.append([''])
         else:
             # Building IDが見つからなかった場合
             print(f"Not found")
+            c_data.append([''])
             l_data.append([''])
-            m_data.append(['', '', '', '', '', '', '', ''])  # entry_id + 広告情報 + 日付を空にする
+            m_data.append(['', '', '', '', '', '', ''])  # 広告情報 + 日付を空にする
     
-    print(f"\nTotal L data rows: {len(l_data)}")
+    print(f"\nTotal C data rows: {len(c_data)}")
+    print(f"Total L data rows: {len(l_data)}")
     print(f"Total M data rows: {len(m_data)}")
-    
-    # 各広告タイプのカウント
+
     # 各広告タイプのカウント（URLが存在するものをカウント）
+    thread_url_count = sum(1 for row in c_data[1:] if row[0])
     p_count = sum(1 for row in m_data[1:] if row[0])
     l_count = sum(1 for row in m_data[1:] if row[2])
     y_count = sum(1 for row in m_data[1:] if row[4])
-    entry_id_count = sum(1 for row in m_data[1:] if row[7])
-    
+
     print(f"\n=== 広告データ統計 ===")
+    print(f"スレURL: {thread_url_count} 件")
     print(f"純広告（P）: {p_count} 件")
     print(f"L広告（L）: {l_count} 件")
     print(f"Yahoo広告（Y）: {y_count} 件")
-    print(f"entry_id: {entry_id_count} 件")
     
+    # C列に書き込み（スレURL）
+    try:
+        body = {'values': c_data}
+        result_c = service.spreadsheets().values().update(
+            spreadsheetId=spreadsheet_id,
+            range='新着物件!C1:C',
+            valueInputOption='RAW',
+            body=body
+        ).execute()
+        print(f"\n=== C列書き込み結果 ===")
+        print(f"Updated rows: {result_c.get('updatedRows')}")
+        print(f"Updated range: {result_c.get('updatedRange')}")
+    except Exception as e:
+        print(f"Error writing C column: {e}")
+        return
+
     # L列に書き込み
     try:
         body = {'values': l_data}
@@ -343,20 +356,20 @@ def main():
         print(f"Error writing L column: {e}")
         return
     
-    # M～T列に書き込み
+    # M～S列に書き込み
     try:
         body = {'values': m_data}
         result_m = service.spreadsheets().values().update(
             spreadsheetId=spreadsheet_id,
-            range='新着物件!M1:T',
+            range='新着物件!M1:S',
             valueInputOption='RAW',
             body=body
         ).execute()
-        print(f"\n=== M～T列書き込み結果 ===")
+        print(f"\n=== M～S列書き込み結果 ===")
         print(f"Updated rows: {result_m.get('updatedRows')}")
         print(f"Updated range: {result_m.get('updatedRange')}")
     except Exception as e:
-        print(f"Error writing M:T columns: {e}")
+        print(f"Error writing M:S columns: {e}")
         return
     
     print("\n=== Process completed! ===")
