@@ -250,7 +250,7 @@ def main():
 
                 # C列にスレURLを追加（APIから取得したentry_idを使用）
                 entry_id = ad_info.get('entry_id', '')
-                thread_url = f"https://www.e-mansion.co.jp/bbs/thread/{entry_id}/" if entry_id else ''
+                thread_url = f"https://m.e-mansion.co.jp/thread/{entry_id}/" if entry_id else ''
                 c_data.append([thread_url])
                 
                 p_flag = ad_info.get('p_sold_flag', '')
